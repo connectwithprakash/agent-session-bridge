@@ -280,9 +280,15 @@ class OptionsScreen(Screen):
             force=self.query_one("#force", Switch).value if placing else False,
         )
 
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        # Enter in any form field submits, like a regular form.
+        self._continue()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id != "continue":
-            return
+        if event.button.id == "continue":
+            self._continue()
+
+    def _continue(self) -> None:
         opts = self._build_options()
         errors = validate_options(opts)
         # ConvertOptions can't represent "placement wanted but no cwd" (the CLI
@@ -499,9 +505,15 @@ class RegisterFormScreen(Screen):
         self.query_one("#hermes-group").display = store == "hermes"
         self.query_one("#codex-group").display = store == "codex"
 
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        # Enter in any form field submits, mirroring OptionsScreen.
+        self._continue()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id != "reg-continue":
-            return
+        if event.button.id == "reg-continue":
+            self._continue()
+
+    def _continue(self) -> None:
         from .register import CodexRegisterOptions, HermesRegisterOptions
 
         store = str(self.query_one("#store", Select).value)
