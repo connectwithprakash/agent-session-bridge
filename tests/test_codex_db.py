@@ -125,6 +125,37 @@ def test_registers_thread_and_indexed_rollout(tmp_path):
     assert turn_context["file_system_sandbox_policy"] == thread_policy["file_system"]
 
 
+def test_cross_provider_registration_uses_target_model_metadata(tmp_path):
+    home = tmp_path / "codex"
+    _make_codex_home(home)
+    source = Session(
+        meta=SessionMeta(
+            source_harness="claude-code",
+            model="claude-sonnet-5",
+            model_provider="anthropic",
+        ),
+        messages=(Message(role=Role.USER, content=(ContentBlock.text_block("remember LARCH"),)),),
+    )
+    session_id = str(uuid.uuid4())
+
+    rollout = register_codex_session(
+        source,
+        home,
+        session_id,
+        cwd=str(tmp_path),
+        title="imported LARCH session",
+        model="gpt-5.6-luna",
+    )
+
+    records = [json.loads(line) for line in rollout.read_text(encoding="utf-8").splitlines()]
+    assert records[0]["payload"]["model_provider"] == "openai"
+    assert records[1]["payload"]["model"] == "gpt-5.6-luna"
+    with sqlite3.connect(home / "state_5.sqlite") as conn:
+        assert conn.execute(
+            "SELECT model_provider, model FROM threads WHERE id = ?", (session_id,)
+        ).fetchone() == ("openai", "gpt-5.6-luna")
+
+
 def test_rejects_non_codex_db_without_creating_a_rollout(tmp_path):
     home = tmp_path / "codex"
     home.mkdir()
@@ -249,6 +280,8 @@ def test_cli_register_codex_backs_up_and_adds_handshake(tmp_path):
             str(tmp_path),
             "--title",
             "imported MAPLE session",
+            "--model",
+            "gpt-5.6-luna",
             "--session-id",
             session_id,
         ]
@@ -275,6 +308,8 @@ def test_cli_register_codex_backs_up_and_adds_handshake(tmp_path):
             str(home),
             "--cwd",
             str(tmp_path),
+            "--model",
+            "gpt-5.6-luna",
             "--session-id",
             second_id,
         ]

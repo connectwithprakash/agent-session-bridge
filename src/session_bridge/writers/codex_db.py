@@ -78,6 +78,23 @@ def validate_codex_store(codex_home: str | Path) -> Path:
     return db_path
 
 
+def infer_codex_model(codex_home: str | Path, model_provider: str = "openai") -> str | None:
+    """Return the most recently used model for a configured Codex provider."""
+    db_path = validate_codex_store(codex_home)
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT model
+            FROM threads
+            WHERE model_provider = ? AND model IS NOT NULL AND model != ''
+            ORDER BY recency_at_ms DESC, updated_at_ms DESC, updated_at DESC
+            LIMIT 1
+            """,
+            (model_provider,),
+        ).fetchone()
+    return row[0] if row else None
+
+
 def _atomic_write_jsonl(records: list[dict], target: Path) -> None:
     """Publish a complete rollout without replacing another registration's file."""
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -160,6 +177,8 @@ def register_codex_session(
     *,
     cwd: str,
     title: str,
+    model: str | None = None,
+    model_provider: str = "openai",
     started_at: Optional[float] = None,
 ) -> Path:
     """Create a Codex rollout and its ``threads`` index row.
@@ -182,6 +201,12 @@ def register_codex_session(
     resolved_cwd = os.path.realpath(os.path.expanduser(cwd))
     if not os.path.isdir(resolved_cwd):
         raise CodexRegistrationError(f"Codex target cwd does not exist: {resolved_cwd}")
+    if not model_provider:
+        raise CodexRegistrationError("Codex target model provider is required")
+    if model is None and session.meta.model_provider == model_provider:
+        model = session.meta.model
+    if not model:
+        raise CodexRegistrationError("Codex target model is required")
 
     home = Path(codex_home).expanduser()
     db_path = validate_codex_store(home)
@@ -197,7 +222,8 @@ def register_codex_session(
         session.meta,
         session_id=session_id,
         cwd=resolved_cwd,
-        model_provider=session.meta.model_provider or "openai",
+        model=model,
+        model_provider=model_provider,
     )
     target_session = replace(session, meta=target_meta)
     transcript_sandbox, index_sandbox = workspace_write_policies(resolved_cwd)

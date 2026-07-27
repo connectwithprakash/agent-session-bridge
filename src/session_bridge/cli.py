@@ -207,6 +207,7 @@ def cmd_register_codex(args: argparse.Namespace) -> int:
     from .writers._common import report_losses
     from .writers.codex_db import (
         CodexRegistrationError,
+        infer_codex_model,
         register_codex_session,
         validate_codex_store,
     )
@@ -232,6 +233,14 @@ def cmd_register_codex(args: argparse.Namespace) -> int:
         return 2
 
     db_path = Path(args.codex_home).expanduser() / "state_5.sqlite"
+    model = args.model or infer_codex_model(args.codex_home, args.model_provider)
+    if not model:
+        print(
+            "Codex registration needs a target model; pass --model because no prior "
+            f"{args.model_provider!r} model was found in {db_path}",
+            file=sys.stderr,
+        )
+        return 2
     if not args.no_backup:
         backup = f"{db_path}.session-bridge-backup-{time.time_ns()}-{uuid.uuid4().hex}"
         backup_sqlite_db(str(db_path), backup)
@@ -244,12 +253,15 @@ def cmd_register_codex(args: argparse.Namespace) -> int:
             session_id,
             cwd=args.cwd,
             title=args.title or f"resumed from {args.source}",
+            model=model,
+            model_provider=args.model_provider,
         )
     except CodexRegistrationError as exc:
         print(f"Codex registration failed: {exc}", file=sys.stderr)
         return 1
 
     print(f"registered session {session_id} into {db_path}")
+    print(f"using Codex model {args.model_provider}/{model}")
     print(f"wrote Codex rollout -> {rollout}")
     print(f"resume with:  (cd {args.cwd} && codex resume {session_id})", file=sys.stderr)
     return 0
@@ -324,6 +336,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="existing project directory Codex uses to discover the resumed session",
     )
     codex_reg.add_argument("--title", help="title shown in Codex's resume picker")
+    codex_reg.add_argument(
+        "--model",
+        help="target Codex model; defaults to the most recently used model for --model-provider",
+    )
+    codex_reg.add_argument(
+        "--model-provider",
+        default="openai",
+        help="target Codex model provider (default: openai; never inferred from the source)",
+    )
     codex_reg.add_argument("--session-id", help="UUID to use (default: a generated UUID)")
     codex_reg.add_argument(
         "--no-backup", action="store_true",
