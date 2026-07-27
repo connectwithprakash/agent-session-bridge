@@ -414,3 +414,92 @@ class TestStubOpenCalls:
         assert plan.error is None
         assert plan.session.pending.open_tool_calls
         assert any("no matching result" in w for w in plan.warnings)
+
+
+# ---- review-round fixes (register slice) ----
+
+
+def test_prepare_codex_unresolvable_home_returns_error_not_raise(tmp_path):
+    # Path("~nosuchuser").expanduser() raises bare RuntimeError; the
+    # never-raise contract must convert it into plan.error.
+    opts = CodexRegisterOptions(
+        source="claude-code",
+        path=str(FIXTURES / "claude_sample.jsonl"),
+        cwd=str(tmp_path),
+        codex_home="~nonexistent_user_xyz/codex",
+    )
+    plan = prepare_codex_register(opts)
+    assert plan.error is not None
+
+
+def test_prepare_codex_rejects_non_uuid_id_at_plan_time(tmp_path):
+    home = tmp_path / ".codex"
+    _make_codex_home(home)
+    _seed_codex_model(home, "gpt-5.2")
+    opts = CodexRegisterOptions(
+        source="claude-code",
+        path=str(FIXTURES / "claude_sample.jsonl"),
+        cwd=str(tmp_path),
+        codex_home=str(home),
+        session_id="sb_1753600000_ab12cd",  # charset-valid but not a UUID
+    )
+    plan = prepare_codex_register(opts)
+    assert plan.error is not None and "UUID" in plan.error
+    # The knowable-bad id must fail BEFORE execute, so no backup is created.
+    outcome = execute_register(plan)
+    assert outcome.error is not None
+    assert not list(home.glob("state_5.sqlite.session-bridge-backup-*"))
+
+
+def test_prepare_codex_home_override_kwarg_fills_blank_field(tmp_path):
+    # Blanking the form's codex-home field must fall back to the app-level
+    # isolated-store override, not escape to the real ~/.codex.
+    home = tmp_path / ".codex"
+    _make_codex_home(home)
+    _seed_codex_model(home, "gpt-5.2")
+    opts = CodexRegisterOptions(
+        source="claude-code",
+        path=str(FIXTURES / "claude_sample.jsonl"),
+        cwd=str(tmp_path),
+        codex_home=None,
+    )
+    plan = prepare_codex_register(opts, codex_home=home)
+    assert plan.error is None
+    assert plan.db_path == home / "state_5.sqlite"
+
+
+def test_execute_errors_when_store_vanished_after_plan(tmp_path):
+    db = tmp_path / "state.db"
+    _make_hermes_db(db)
+    opts = HermesRegisterOptions(
+        source="claude-code",
+        path=str(FIXTURES / "claude_sample.jsonl"),
+        db=str(db),
+    )
+    plan = prepare_hermes_register(opts)
+    assert plan.error is None
+    db.unlink()
+    outcome = execute_register(plan)
+    assert outcome.error is not None and "no longer exists" in outcome.error
+    # The guard must run before any sqlite3.connect recreates the store,
+    # and no backup file may be left behind.
+    assert not db.exists()
+    assert not list(tmp_path.glob("state.db.session-bridge-backup-*"))
+    assert outcome.backup_path is None
+
+
+def test_prepare_codex_plan_leaves_store_bytes_untouched(tmp_path):
+    # The plan phase must be strictly read-only on the live store.
+    home = tmp_path / ".codex"
+    _make_codex_home(home)
+    _seed_codex_model(home, "gpt-5.2")
+    before = (home / "state_5.sqlite").read_bytes()
+    opts = CodexRegisterOptions(
+        source="claude-code",
+        path=str(FIXTURES / "claude_sample.jsonl"),
+        cwd=str(tmp_path),
+        codex_home=str(home),
+    )
+    plan = prepare_codex_register(opts)
+    assert plan.error is None
+    assert (home / "state_5.sqlite").read_bytes() == before

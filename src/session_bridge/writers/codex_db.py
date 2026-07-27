@@ -70,7 +70,10 @@ def validate_codex_store(codex_home: str | Path) -> Path:
     db_path = Path(codex_home).expanduser() / "state_5.sqlite"
     if not db_path.is_file():
         raise CodexRegistrationError(f"Codex state_5.sqlite not found: {db_path}")
-    conn = sqlite3.connect(db_path)
+    # Read-only URI: this runs at plan/validation time, before any backup
+    # exists, so it must not be able to touch the live store (a default
+    # connect opens read-write and can checkpoint the WAL).
+    conn = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True)
     try:
         _require_schema(conn)
     finally:
@@ -81,7 +84,10 @@ def validate_codex_store(codex_home: str | Path) -> Path:
 def infer_codex_model(codex_home: str | Path, model_provider: str = "openai") -> str | None:
     """Return the most recently used model for a configured Codex provider."""
     db_path = validate_codex_store(codex_home)
-    with sqlite3.connect(db_path) as conn:
+    # Read-only, and explicitly closed: sqlite3's context manager only manages
+    # transactions, so a bare `with connect(...)` leaks the handle.
+    conn = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True)
+    try:
         row = conn.execute(
             """
             SELECT model
@@ -92,6 +98,8 @@ def infer_codex_model(codex_home: str | Path, model_provider: str = "openai") ->
             """,
             (model_provider,),
         ).fetchone()
+    finally:
+        conn.close()
     return row[0] if row else None
 
 

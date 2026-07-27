@@ -266,27 +266,37 @@ def prepare_hermes_register(
             opts=opts,
             error=None,
         )
-    except (OSError, sqlite3.Error, ValueError, HermesRegistrationError) as exc:
+    except (OSError, sqlite3.Error, ValueError, RuntimeError) as exc:
         # Broad safety net: a screen must render an error, never a traceback.
         # ValueError also covers unknown-harness and JSON parse failures from
         # read_session; UnicodeDecodeError is a ValueError subclass.
+        # RuntimeError covers HermesRegistrationError and expanduser's bare
+        # RuntimeError on an unresolvable "~user" path.
         return _error_plan("hermes", opts, str(exc))
 
 
-def prepare_codex_register(opts: CodexRegisterOptions) -> RegisterPlan:
+def prepare_codex_register(
+    opts: CodexRegisterOptions, *, codex_home: Path | None = None
+) -> RegisterPlan:
     """Plan a Codex registration without writing anything.
 
     Mirrors ``cli.cmd_register_codex``: losses reported pre-stub, optional
     stubbing, then a resume handshake ALWAYS prepended, store/id validation,
     and model inference from the target store when ``opts.model`` is unset.
     Never raises.
+
+    ``codex_home`` is the app-level store override (tests, isolated stores);
+    like ``prepare_hermes_register``'s ``hermes_home``, it fills in when the
+    form field (``opts.codex_home``) is blank, so blanking the field cannot
+    silently escape an isolated store to the real ``~/.codex``.
     """
     try:
-        home = (
-            Path(opts.codex_home).expanduser()
-            if opts.codex_home
-            else Path("~/.codex").expanduser()
-        )
+        if opts.codex_home:
+            home = Path(opts.codex_home).expanduser()
+        elif codex_home is not None:
+            home = Path(codex_home)
+        else:
+            home = Path("~/.codex").expanduser()
         db_path = home / "state_5.sqlite"
 
         session = read_session(opts.source, opts.path)
@@ -305,6 +315,15 @@ def prepare_codex_register(opts: CodexRegisterOptions) -> RegisterPlan:
         )
         try:
             validate_session_id(session_id)
+            # register_codex_session additionally requires a UUID-shaped id;
+            # check it at plan time so a knowable-bad id fails BEFORE the
+            # backup is taken at execute time.
+            try:
+                uuid.UUID(session_id)
+            except ValueError as exc:
+                raise CodexRegistrationError(
+                    f"Codex session id must be a UUID: {session_id!r}"
+                ) from exc
             validate_codex_store(home)
         except (UnsafeSessionIdError, CodexRegistrationError) as exc:
             return _error_plan(
@@ -347,7 +366,9 @@ def prepare_codex_register(opts: CodexRegisterOptions) -> RegisterPlan:
             opts=opts,
             error=None,
         )
-    except (OSError, sqlite3.Error, ValueError, CodexRegistrationError) as exc:
+    except (OSError, sqlite3.Error, ValueError, RuntimeError) as exc:
+        # RuntimeError covers CodexRegistrationError and expanduser's bare
+        # RuntimeError on an unresolvable "~user" path.
         return _error_plan("codex", opts, str(exc))
 
 
@@ -382,18 +403,35 @@ def execute_register(plan: RegisterPlan) -> RegisterOutcome:
     ):
         return outcome("register plan is incomplete; re-run the prepare step")
 
+    def _take_backup(backup_fn) -> None:
+        # A failed backup must not leave an undisclosed partial file (the
+        # backup API creates the destination before copying into it).
+        nonlocal backup_path
+        backup = (
+            f"{plan.db_path}.session-bridge-backup-"
+            f"{time.time_ns()}-{uuid.uuid4().hex}"
+        )
+        try:
+            backup_fn(str(plan.db_path), backup)
+        except BaseException:
+            Path(backup).unlink(missing_ok=True)
+            raise
+        backup_path = Path(backup)
+
     try:
+        # The plan screen can sit open indefinitely; if the store vanished
+        # since planning, fail here rather than let the backup's
+        # sqlite3.connect silently create an empty file at the live path.
+        if not plan.db_path.exists():
+            return outcome(
+                f"store no longer exists (moved or deleted since plan): {plan.db_path}"
+            )
         if plan.store == "hermes":
             opts = plan.opts
             if not opts.no_backup:
                 # WAL-safe backup via the SQLite backup API, same filename
                 # pattern as the CLI.
-                backup = (
-                    f"{plan.db_path}.session-bridge-backup-"
-                    f"{time.time_ns()}-{uuid.uuid4().hex}"
-                )
-                backup_hermes_db(str(plan.db_path), backup)
-                backup_path = Path(backup)
+                _take_backup(backup_hermes_db)
             register_hermes_session(
                 plan.session,
                 str(plan.db_path),
@@ -406,12 +444,7 @@ def execute_register(plan: RegisterPlan) -> RegisterOutcome:
         elif plan.store == "codex":
             opts = plan.opts
             if not opts.no_backup:
-                backup = (
-                    f"{plan.db_path}.session-bridge-backup-"
-                    f"{time.time_ns()}-{uuid.uuid4().hex}"
-                )
-                backup_sqlite_db(str(plan.db_path), backup)
-                backup_path = Path(backup)
+                _take_backup(backup_sqlite_db)
             # db_path is always <codex_home>/state_5.sqlite, so the home is its
             # parent — no need to re-resolve opts.codex_home's None default.
             rollout_path = register_codex_session(
@@ -431,11 +464,12 @@ def execute_register(plan: RegisterPlan) -> RegisterOutcome:
         else:
             return outcome(f"unknown register store: {plan.store!r}")
     except (
-        HermesRegistrationError,
-        CodexRegistrationError,
         OSError,
         sqlite3.Error,
         ValueError,
+        # Covers HermesRegistrationError / CodexRegistrationError (both
+        # RuntimeError subclasses) plus any bare RuntimeError.
+        RuntimeError,
     ) as exc:
         return outcome(str(exc))
     return outcome(None)

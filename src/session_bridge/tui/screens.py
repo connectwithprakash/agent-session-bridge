@@ -570,42 +570,58 @@ class RegisterPlanScreen(Screen):
 
     @work(thread=True, exclusive=True)
     def _prepare(self) -> None:
-        from .register import prepare_codex_register, prepare_hermes_register
+        from .register import RegisterPlan, prepare_codex_register, prepare_hermes_register
 
-        if self.store == "hermes":
-            plan = prepare_hermes_register(
-                self.opts, hermes_home=getattr(self.app, "hermes_home", None)
+        try:
+            if self.store == "hermes":
+                plan = prepare_hermes_register(
+                    self.opts, hermes_home=getattr(self.app, "hermes_home", None)
+                )
+            else:
+                plan = prepare_codex_register(
+                    self.opts, codex_home=getattr(self.app, "codex_home", None)
+                )
+        except Exception as exc:
+            # prepare_* promise never to raise; if that regresses, render the
+            # failure rather than crash the terminal.
+            plan = RegisterPlan(
+                store=self.store, session=None, warnings=[], notes=[],
+                session_id=None, db_path=None, model=None, cli_command="",
+                opts=self.opts, error=str(exc),
             )
-        else:
-            plan = prepare_codex_register(self.opts)
         self.app.call_from_thread(self._render_plan, plan)
 
     def _render_plan(self, plan) -> None:
         self.plan = plan
         body = self.query_one("#plan-body", Static)
+        lines = []
         if plan.error:
-            body.update(
-                f"[b red]cannot register[/]\n\n{escape(plan.error)}\n\nescape to go back"
-            )
-            return
-        lines = [
-            f"[b]store[/]        {self.store} -> {escape(str(plan.db_path))}",
-            f"[b]session id[/]   {escape(str(plan.session_id))}",
-            f"[b]model[/]        {escape(plan.model or '(source model id)')}",
-            f"[b]backup[/]       "
-            + ("taken before writing" if not self.opts.no_backup else "[yellow]DISABLED[/]"),
-        ]
+            # Error plans still carry the computed loss disclosure — show it,
+            # like the CLI prints its conversion notes before failing.
+            lines.append(f"[b red]cannot register[/]\n\n{escape(plan.error)}\n")
+        else:
+            lines += [
+                f"[b]store[/]        {self.store} -> {escape(str(plan.db_path))}",
+                f"[b]session id[/]   {escape(str(plan.session_id))}",
+                f"[b]model[/]        {escape(plan.model or '(source model id)')}",
+                "[b]backup[/]       "
+                + ("taken before writing" if not self.opts.no_backup else "[yellow]DISABLED[/]"),
+            ]
         if plan.warnings:
             lines.append(f"\n[b]{len(plan.warnings)} conversion note(s):[/]")
             lines.extend(f"  [yellow]- {escape(w)}[/]" for w in plan.warnings)
-        else:
+        elif not plan.error:
             lines.append("\n[green]lossless registration (no warnings).[/]")
         for note in plan.notes:
             lines.append(f"[dim]note: {escape(note)}[/]")
-        lines.append("\n[b]equivalent CLI command:[/]")
-        lines.append(f"  [dim]{escape(plan.cli_command)}[/]")
+        if plan.cli_command:
+            lines.append("\n[b]equivalent CLI command:[/]")
+            lines.append(f"  [dim]{escape(plan.cli_command)}[/]")
+        if plan.error:
+            lines.append("\n[dim]escape to go back[/]")
         body.update("\n".join(lines))
-        self.query_one("#register", Button).disabled = False
+        if not plan.error:
+            self.query_one("#register", Button).disabled = False
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "plan-cancel":
