@@ -371,7 +371,11 @@ class DryRunScreen(Screen):
         lines.append("\n[b]equivalent CLI command:[/]")
         lines.append(f"  [dim]{escape(build_cli_command(opts))}[/]")
         self.query_one("#dryrun-body", Static).update("\n".join(lines))
-        self.query_one("#write", Button).disabled = False
+        write = self.query_one("#write", Button)
+        write.disabled = False
+        # While Write was disabled, focus defaulted to Cancel — move it so
+        # plain Enter confirms rather than silently cancelling.
+        write.focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel":
@@ -621,7 +625,11 @@ class RegisterPlanScreen(Screen):
             lines.append("\n[dim]escape to go back[/]")
         body.update("\n".join(lines))
         if not plan.error:
-            self.query_one("#register", Button).disabled = False
+            register = self.query_one("#register", Button)
+            register.disabled = False
+            # Same focus handoff as DryRunScreen: Enter should confirm, not
+            # hit the Cancel button that had default focus while disabled.
+            register.focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "plan-cancel":
