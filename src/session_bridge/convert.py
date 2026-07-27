@@ -45,6 +45,18 @@ class ConversionResult:
     handshake: str
 
 
+def default_output_name(path: str | Path, target: str) -> str:
+    """Default output filename for a conversion, shared by the CLI and the TUI."""
+    return Path(path).with_suffix("").name + f".{target}.jsonl"
+
+
+def now_codex_timestamp() -> str:
+    """Current UTC time in the ISO shape Codex stamps on session_meta records."""
+    import time
+
+    return time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+
+
 def read_session(source: str, path: str | Path) -> Session:
     if source not in READERS:
         raise ValueError(f"unknown source harness '{source}'; choose from {HARNESSES}")
