@@ -14,8 +14,15 @@ def test_tui_subcommand_registered():
 def test_tui_missing_textual_prints_install_hint(monkeypatch, capsys):
     # Poisoning sys.modules makes `import textual` raise plain ImportError,
     # which is why cmd_tui catches ImportError rather than ModuleNotFoundError.
+    # Poison every cached textual submodule too: other test modules (the Pilot
+    # suite) import textual at collection time, and a cached `textual.app`
+    # would satisfy `from textual.app import ...` despite the poisoned parent.
+    for name in list(sys.modules):
+        if name == "textual" or name.startswith("textual."):
+            monkeypatch.setitem(sys.modules, name, None)
     monkeypatch.setitem(sys.modules, "textual", None)
     monkeypatch.delitem(sys.modules, "session_bridge.tui.app", raising=False)
+    monkeypatch.delitem(sys.modules, "session_bridge.tui.screens", raising=False)
     rc = main(["tui"])
     assert rc == 2
     err = capsys.readouterr().err

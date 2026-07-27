@@ -63,6 +63,13 @@ python3 -m pip install -e '.[tui]'   # the TUI needs the optional textual depend
 session-bridge tui
 ```
 
+Pick a session, then `c` to convert (with optional Claude Code placement) or
+`g` to register it into Hermes's `state.db` or Codex's `state_5.sqlite`. Both
+flows end in a plan screen — loss warnings, backup plan, and the equivalent
+CLI command — before any file or database is touched; registration backs up
+the store first by default, and the planning phase opens live stores
+read-only.
+
 Inspect a session's structure:
 
 ```bash
