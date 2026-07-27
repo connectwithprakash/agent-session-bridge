@@ -12,7 +12,14 @@ import os
 import sys
 from pathlib import Path
 
-from .convert import HARNESSES, convert, dump_jsonl, read_session
+from .convert import (
+    HARNESSES,
+    convert,
+    default_output_name,
+    dump_jsonl,
+    now_codex_timestamp,
+    read_session,
+)
 from .ir import BlockType
 
 
@@ -43,8 +50,6 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
-    import time
-
     # Validate incompatible flags before writing anything, so an invalid combo
     # doesn't leave a stray -o output file on disk alongside the error.
     if args.place_claude_cwd and args.target != "claude-code":
@@ -53,9 +58,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
     # Stamp Codex output with the real current time so the session isn't dated to
     # the writer's placeholder epoch (which can hide it from Codex's recency sort).
-    codex_ts = None
-    if args.target == "codex":
-        codex_ts = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+    codex_ts = now_codex_timestamp() if args.target == "codex" else None
 
     result = convert(
         args.source,
@@ -65,7 +68,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
         codex_timestamp=codex_ts,
         stub_open_calls=args.stub_open_calls,
     )
-    out = args.output or (Path(args.path).with_suffix("").name + f".{args.target}.jsonl")
+    out = args.output or default_output_name(args.path, args.target)
     dump_jsonl(result.records, out)
     print(f"wrote {len(result.records)} records -> {out}")
 
@@ -267,6 +270,22 @@ def cmd_register_codex(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tui(args: argparse.Namespace) -> int:
+    """Launch the interactive TUI (requires the optional 'textual' dependency)."""
+    try:
+        from .tui.app import run_tui
+    except ImportError:
+        # ImportError, not just ModuleNotFoundError: also covers a broken or
+        # half-installed textual, which should get the same actionable hint.
+        print(
+            "the TUI needs the optional 'textual' dependency:\n"
+            "  pip install 'session-bridge[tui]'",
+            file=sys.stderr,
+        )
+        return 2
+    return run_tui()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="session-bridge", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -356,6 +375,13 @@ def build_parser() -> argparse.ArgumentParser:
              "before registering, so the resumed transcript is provider-valid",
     )
     codex_reg.set_defaults(func=cmd_register_codex)
+
+    tui = sub.add_parser(
+        "tui",
+        help="interactive session picker/converter "
+             "(requires: pip install 'session-bridge[tui]')",
+    )
+    tui.set_defaults(func=cmd_tui)
     return parser
 
 

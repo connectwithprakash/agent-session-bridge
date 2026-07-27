@@ -13,6 +13,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+tui = ["textual>=1.0"]
 
 [project.scripts]
 session-bridge = "session_bridge.cli:main"

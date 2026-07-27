@@ -54,6 +54,15 @@ sections below are the quick reference.
 
 ## Usage
 
+Prefer a guided flow? The interactive TUI discovers sessions across all three
+stores, walks you through target/options, and shows conversion notes **before**
+anything is written:
+
+```bash
+python3 -m pip install -e '.[tui]'   # the TUI needs the optional textual dependency
+session-bridge tui
+```
+
 Inspect a session's structure:
 
 ```bash
