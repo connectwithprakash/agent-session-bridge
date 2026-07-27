@@ -198,6 +198,8 @@ Claude Code is **both** append-ordered **and** an explicit linked list:
 ## 2. Codex
 
 Path: `~/.codex/sessions/YYYY/MM/DD/rollout-<ISO-ts>-<session-uuid>.jsonl`.
+Codex discovers resumable sessions through `~/.codex/state_5.sqlite`'s `threads`
+table, whose `rollout_path` points at this file; a rollout alone is not sufficient.
 
 ### 2.1 Top-level record types and frequency
 
@@ -264,15 +266,16 @@ There is *also* an `event_msg` echo of the raw user text:
 Mirrored by `event_msg → agent_message`:
 `{ "type": "agent_message", "message": "Hi.", "phase": "final_answer", "memory_citation": null }`.
 
-**ASSISTANT reasoning, TOOL CALL, TOOL RESULT — NOT OBSERVED locally.** All three
-Codex sessions on this machine were short chat sessions with no tool use, so no
-`reasoning`, `function_call`, `function_call_output`, `local_shell_call`, or
-`custom_tool_call` records exist to quote. These are **documented Codex/Responses-API
-`response_item` payload types** the tool must still support (shapes below are the
-canonical Responses-API forms, flagged as *unobserved-in-sample*):
+**ASSISTANT reasoning, TOOL CALL, TOOL RESULT — the local 0.145.0 structural
+capture contains a reasoning record but no tool-call or tool-result records.**
+`function_call`, `function_call_output`, `local_shell_call`, and
+`custom_tool_call` therefore cannot be quoted from that capture. These are
+**documented Codex/Responses-API `response_item` payload types** the tool must
+still support (shapes below are canonical Responses-API forms, flagged as
+*unobserved-in-sample*):
 
 ```jsonc
-// reasoning (unobserved here; cf. Hermes codex_reasoning_items which mirrors it)
+// reasoning (observed locally; cf. Hermes codex_reasoning_items which mirrors it)
 { "type": "reasoning", "id": "rs_…", "summary": [ { "type": "summary_text", "text": "…" } ],
   "encrypted_content": "<REDACTED>" }
 // function_call (unobserved)
@@ -318,6 +321,19 @@ log.
   (`call_id`) = a pending/in-flight tool (structurally detectable; none in sample).
 - No queued-user-message concept in the log.
 - `world_state` (`{full, state}`) captures a point-in-time tool/world snapshot.
+
+### 2.7 Resume index
+
+The current Codex CLI also maintains a SQLite `threads` index in
+`~/.codex/state_5.sqlite`. Required fields include `id`, `rollout_path`, time
+fields, source/provider/cwd metadata, title, sandbox policy, and approval mode.
+`session-bridge register-codex` validates those fields against the installed
+schema, publishes the rollout without replacing another registration's file, and
+then inserts the index row in a SQLite transaction. Normal index failures remove
+the newly-published rollout; a process crash can leave an unindexed file, which
+Codex ignores. The implementation is tested against an isolated current-shaped
+schema and live-recall verified with authenticated Codex CLI 0.145.0; future CLI
+schema changes need the same authenticated acceptance check.
 
 ---
 

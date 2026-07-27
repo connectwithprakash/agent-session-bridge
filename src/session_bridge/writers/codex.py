@@ -28,8 +28,35 @@ def _msg_payload(role: str, text: str) -> dict[str, Any]:
     return {"type": "message", "role": role, "content": [{"type": block_type, "text": text}]}
 
 
+def workspace_write_policies(cwd: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return matching Codex transcript and thread-store sandbox policies."""
+    entries = [
+        {"path": {"type": "special", "value": {"kind": "root"}}, "access": "read"},
+        {"path": {"type": "path", "path": cwd}, "access": "write"},
+        {"path": {"type": "special", "value": {"kind": "slash_tmp"}}, "access": "write"},
+        {"path": {"type": "special", "value": {"kind": "tmpdir"}}, "access": "write"},
+        {"path": {"type": "path", "path": f"{cwd}/.git"}, "access": "read"},
+        {"path": {"type": "path", "path": f"{cwd}/.agents"}, "access": "read"},
+        {"path": {"type": "path", "path": f"{cwd}/.codex"}, "access": "read"},
+    ]
+    return (
+        {
+            "type": "workspace-write",
+            "network_access": False,
+            "exclude_tmpdir_env_var": False,
+            "exclude_slash_tmp": False,
+        },
+        {"type": "managed", "file_system": {"type": "restricted", "entries": entries}, "network": "restricted"},
+    )
+
+
 def write_codex(
-    session: Session, *, timestamp: str = "2000-01-01T00:00:00.000Z"
+    session: Session,
+    *,
+    timestamp: str = "2000-01-01T00:00:00.000Z",
+    approval_policy: str | None = None,
+    sandbox_policy: dict[str, Any] | None = None,
+    file_system_sandbox_policy: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], ConversionReport]:
     """Render the IR into a Codex rollout.
 
@@ -51,7 +78,7 @@ def write_codex(
                 "timestamp": timestamp,
                 "cwd": session.meta.cwd,
                 "originator": "codex-cli",
-                "cli_version": session.meta.version or "0.144.5",
+                "cli_version": session.meta.version or "0.145.0",
                 "source": "cli",
                 "thread_source": "user",
                 "model_provider": session.meta.model_provider or "openai",
@@ -65,7 +92,9 @@ def write_codex(
                 "turn_id": "t1",
                 "model": session.meta.model or "unknown",
                 "cwd": session.meta.cwd,
-                "approval_policy": session.meta.permission_mode or "on-request",
+                "approval_policy": approval_policy or session.meta.permission_mode or "on-request",
+                "sandbox_policy": sandbox_policy,
+                "file_system_sandbox_policy": file_system_sandbox_policy,
             },
         },
     ]

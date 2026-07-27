@@ -49,8 +49,8 @@ class HermesRegistrationError(RuntimeError):
     pass
 
 
-def backup_hermes_db(db_path: str, backup_path: str) -> None:
-    """Copy the live Hermes store to ``backup_path`` safely.
+def backup_sqlite_db(db_path: str, backup_path: str) -> None:
+    """Copy a live SQLite store to ``backup_path`` safely.
 
     A plain file copy (``shutil.copy2``) copies only the main ``.db`` file, not
     the sibling ``-wal``/``-shm``. Hermes runs in WAL mode with the gateway
@@ -73,6 +73,11 @@ def backup_hermes_db(db_path: str, backup_path: str) -> None:
             dest.close()
     finally:
         src.close()
+
+
+def backup_hermes_db(db_path: str, backup_path: str) -> None:
+    """Backward-compatible name for backing up Hermes's SQLite store."""
+    backup_sqlite_db(db_path, backup_path)
 
 
 def _require_schema(conn: sqlite3.Connection) -> None:

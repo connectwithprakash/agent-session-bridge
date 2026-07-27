@@ -105,7 +105,7 @@ that existed only in the converted transcript).
 |---|---|---|
 | Claude Code (2.1.x) | Write to `~/.claude/projects/<encoded-cwd>/<uuid>.jsonl`, then `claude --resume <uuid>` **launched from the matching cwd** | **Yes** |
 | Hermes | Valid filename in `~/.hermes/sessions/` is not enough | **No** (needs a SQLite session-store row) |
-| Codex | Rollout in `~/.codex/sessions/...` is accepted but not replayed as context | **No** (needs a `threads` row in `state_5.sqlite` + turn-structured records) |
+| Codex | `register-codex` writes a rollout and its `threads` index row in `state_5.sqlite` | **Yes** (live-recall verified with Codex CLI 0.145.0) |
 
 **Claude Code** resolves `--resume <uuid>` directly from the transcript file. The
 one catch: the encoded-cwd directory name must match the directory you launch
@@ -152,17 +152,30 @@ history and the model recalls it. Two things matter, both handled by the command
 (driven through OpenRouter): `function_call` / `function_call_output` / `reasoning`
 (both `summary` and `content[]` shapes) parse correctly and round-trip identically.
 Codex also indexes sessions in SQLite (`state_5.sqlite`, a `threads` row with a
-`rollout_path`). Placing a rollout makes Codex *accept* it, but `codex resume` does
-not replay bare message records as context; it needs a `threads` row plus
-turn-structured records. So Codex convert/read is solid; live resume registration
-is not yet built (parallels the Hermes work).
+`rollout_path`). Use `register-codex` to write a converted rollout and index it;
+the command validates the local schema, takes a SQLite online-backup before the
+mutation, publishes the rollout without overwriting another registration, then
+indexes it in SQLite. It removes its own rollout if the index transaction fails;
+a process crash can still leave an unindexed rollout, which Codex ignores.
+
+```bash
+session-bridge register-codex --from hermes SESSION.jsonl \
+  --cwd ~/Developer/myproject --title "resumed from Hermes"
+# backed up Codex state_5.sqlite -> ...
+# registered session <uuid> into ~/.codex/state_5.sqlite
+# resume with:  (cd ~/Developer/myproject && codex resume <uuid>)
+```
+
+This registration path is covered against an isolated Codex-shaped SQLite store
+and was live-recall verified with Codex CLI 0.145.0: after `codex exec resume`
+opened an imported session, the model returned a unique sentinel that existed
+only in that transcript.
 
 ## Known limitations
 
-- Codex live-resume registration is not implemented: reading and round-trip are
-  verified against a real tool-using session, but making `codex resume` replay a
-  converted session as context needs a `threads`-store write plus turn structure
-  (parallels `register` for Hermes).
+- Codex registration is schema-validated and regression-tested against an isolated
+  `threads` store; live recall was verified with Codex CLI 0.145.0. Future Codex
+  schema changes still need the same authenticated acceptance check.
 - Queued-input detection is conservative: it may over-report undelivered input
   rather than silently drop it (the safe direction for resume). Enqueue/dequeue
   matching is scoped per `sessionId`.
@@ -177,7 +190,7 @@ is not yet built (parallels the Hermes work).
 ## Development
 
 ```bash
-python3 -m pytest        # 61 tests: IR, three readers, writers/round-trips, handshake, place, CLI
+python3 -m pytest        # IR, three readers, writers/round-trips, handshake, placement, and both SQLite registrars
 ```
 
 Real captured sessions may contain secrets; `fixtures/real/` is gitignored and

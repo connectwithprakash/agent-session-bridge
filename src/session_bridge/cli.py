@@ -166,7 +166,7 @@ def cmd_register(args: argparse.Namespace) -> int:
         return 2
 
     if not args.no_backup:
-        backup = f"{db_path}.session-bridge-backup-{int(time.time())}"
+        backup = f"{db_path}.session-bridge-backup-{time.time_ns()}-{uuid.uuid4().hex}"
         # WAL-safe: a plain file copy would miss committed rows still in the
         # sibling -wal file (Hermes runs WAL with the gateway holding the DB
         # open). The SQLite backup API reads through the live state.
@@ -194,6 +194,64 @@ def cmd_register(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     print(f"resume with:  hermes --resume {session_id}", file=sys.stderr)
+    return 0
+
+
+def cmd_register_codex(args: argparse.Namespace) -> int:
+    """Register a converted session into Codex's index and rollout store."""
+    import time
+    import uuid
+
+    from ._ids import UnsafeSessionIdError, validate_session_id
+    from .handshake import handshake_message, stub_open_tool_calls
+    from .writers._common import report_losses
+    from .writers.codex_db import (
+        CodexRegistrationError,
+        register_codex_session,
+        validate_codex_store,
+    )
+    from .writers.hermes_db import backup_sqlite_db
+
+    session = read_session(args.source, args.path)
+    report = report_losses(session, "codex")
+    if report.warnings:
+        print(f"\n{len(report.warnings)} conversion note(s):", file=sys.stderr)
+        for warning in report.warnings:
+            print(f"  - {warning}", file=sys.stderr)
+
+    if args.stub_open_calls:
+        session = stub_open_tool_calls(session)
+    session = session.with_messages((handshake_message(session, report, "codex"),) + session.messages)
+
+    session_id = args.session_id or str(uuid.uuid4())
+    try:
+        validate_session_id(session_id)
+        validate_codex_store(args.codex_home)
+    except (UnsafeSessionIdError, CodexRegistrationError) as exc:
+        print(f"invalid Codex registration: {exc}", file=sys.stderr)
+        return 2
+
+    db_path = Path(args.codex_home).expanduser() / "state_5.sqlite"
+    if not args.no_backup:
+        backup = f"{db_path}.session-bridge-backup-{time.time_ns()}-{uuid.uuid4().hex}"
+        backup_sqlite_db(str(db_path), backup)
+        print(f"backed up Codex state_5.sqlite -> {backup}", file=sys.stderr)
+
+    try:
+        rollout = register_codex_session(
+            session,
+            args.codex_home,
+            session_id,
+            cwd=args.cwd,
+            title=args.title or f"resumed from {args.source}",
+        )
+    except CodexRegistrationError as exc:
+        print(f"Codex registration failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"registered session {session_id} into {db_path}")
+    print(f"wrote Codex rollout -> {rollout}")
+    print(f"resume with:  (cd {args.cwd} && codex resume {session_id})", file=sys.stderr)
     return 0
 
 
@@ -250,6 +308,33 @@ def build_parser() -> argparse.ArgumentParser:
                           "session is resumable (a call with no result breaks "
                           "`hermes --resume`)")
     reg.set_defaults(func=cmd_register)
+
+    codex_reg = sub.add_parser(
+        "register-codex",
+        help="register a session into Codex's local store so `codex resume` finds it",
+    )
+    codex_reg.add_argument("--from", dest="source", required=True, choices=HARNESSES)
+    codex_reg.add_argument("path")
+    codex_reg.add_argument(
+        "--codex-home", default=os.path.expanduser("~/.codex"),
+        help="Codex home containing state_5.sqlite (default: ~/.codex)",
+    )
+    codex_reg.add_argument(
+        "--cwd", required=True,
+        help="existing project directory Codex uses to discover the resumed session",
+    )
+    codex_reg.add_argument("--title", help="title shown in Codex's resume picker")
+    codex_reg.add_argument("--session-id", help="UUID to use (default: a generated UUID)")
+    codex_reg.add_argument(
+        "--no-backup", action="store_true",
+        help="skip backing up state_5.sqlite first (not recommended)",
+    )
+    codex_reg.add_argument(
+        "--stub-open-calls", action="store_true",
+        help="append a synthetic interrupted tool_result for each still-open tool call "
+             "before registering, so the resumed transcript is provider-valid",
+    )
+    codex_reg.set_defaults(func=cmd_register_codex)
     return parser
 
 
