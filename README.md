@@ -58,6 +58,8 @@ Prefer a guided flow? The interactive TUI discovers sessions across all three
 stores, walks you through target/options, and shows conversion notes **before**
 anything is written:
 
+![session-bridge TUI walkthrough: pick a session, inspect, dry-run, write](docs/media/tui-demo.gif)
+
 ```bash
 python3 -m pip install -e '.[tui]'   # the TUI needs the optional textual dependency
 session-bridge tui
