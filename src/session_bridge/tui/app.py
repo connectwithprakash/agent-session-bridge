@@ -28,6 +28,8 @@ class SessionBridgeApp(App):
     #form-errors { color: $error; }
     #dryrun-buttons { height: auto; padding: 0 2 1 2; }
     #dryrun-buttons Button { margin-right: 2; }
+    #plan-buttons { height: auto; padding: 0 2 1 2; }
+    #plan-buttons Button { margin-right: 2; }
     Label { margin-top: 1; }
     """
 

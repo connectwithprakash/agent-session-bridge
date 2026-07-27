@@ -132,6 +132,7 @@ class SummaryScreen(Screen):
 
     BINDINGS = [
         ("c", "convert", "Convert"),
+        ("g", "register", "Register"),
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -178,6 +179,10 @@ class SummaryScreen(Screen):
     def action_convert(self) -> None:
         if self.session is not None:
             self.app.push_screen(OptionsScreen(self.entry, self.session))
+
+    def action_register(self) -> None:
+        if self.session is not None:
+            self.app.push_screen(RegisterFormScreen(self.entry))
 
 
 class OptionsScreen(Screen):
@@ -421,6 +426,244 @@ class ResultScreen(Screen):
         if o.error:
             lines.append(f"\n[b red]error:[/] {escape(o.error)}")
         lines.append("\n[dim]n for another conversion, q to quit[/]")
+        return "\n".join(lines)
+
+    def action_new_conversion(self) -> None:
+        while not isinstance(self.app.screen, PickerScreen):
+            self.app.pop_screen()
+
+    def action_quit(self) -> None:
+        self.app.exit()
+
+
+class RegisterFormScreen(Screen):
+    """Registration options: write the session into a harness's SQLite store."""
+
+    BINDINGS = [("escape", "app.pop_screen", "Back")]
+
+    def __init__(self, entry: SessionEntry) -> None:
+        super().__init__()
+        self.entry = entry
+
+    def compose(self) -> ComposeResult:
+        app_codex_home = getattr(self.app, "codex_home", None)
+        yield Header()
+        with VerticalScroll():
+            yield Label("Target store")
+            yield Select(
+                [("Hermes (state.db)", "hermes"), ("Codex (state_5.sqlite)", "codex")],
+                value="hermes",
+                allow_blank=False,
+                id="store",
+            )
+            yield Label("Title (optional)")
+            yield Input(placeholder=f"resumed from {self.entry.harness}", id="reg-title")
+            yield Label("Session id (blank: generated)")
+            yield Input(id="reg-session-id")
+            with Horizontal(classes="switch-row"):
+                yield Switch(value=False, id="reg-stub")
+                yield Label("stub open tool calls (synthetic interrupted results)")
+            with Horizontal(classes="switch-row"):
+                yield Switch(value=True, id="reg-backup")
+                yield Label("back up the store before writing (recommended)")
+            with Vertical(id="hermes-group"):
+                yield Label("Hermes state.db path (blank: ~/.hermes/state.db)")
+                yield Input(id="hermes-db")
+                yield Label("Model to store (blank: keep source id — may not route)")
+                yield Input(id="hermes-model")
+            with Vertical(id="codex-group"):
+                yield Label("Project cwd Codex resumes from (required)")
+                yield Input(value=self.entry.cwd or "", id="codex-cwd")
+                yield Label("Codex home (blank: ~/.codex)")
+                yield Input(value=str(app_codex_home) if app_codex_home else "", id="codex-home")
+                yield Label("Model (blank: infer most recently used)")
+                yield Input(id="codex-model")
+                yield Label("Model provider")
+                yield Input(value="openai", id="codex-provider")
+            yield Static("", id="reg-errors")
+            yield Button("Continue to plan", variant="primary", id="reg-continue")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self._sync_store("hermes")
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "store":
+            self._sync_store(str(event.value))
+
+    def _sync_store(self, store: str) -> None:
+        self.query_one("#hermes-group").display = store == "hermes"
+        self.query_one("#codex-group").display = store == "codex"
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id != "reg-continue":
+            return
+        from .register import CodexRegisterOptions, HermesRegisterOptions
+
+        store = str(self.query_one("#store", Select).value)
+        title = self.query_one("#reg-title", Input).value.strip() or None
+        session_id = self.query_one("#reg-session-id", Input).value.strip() or None
+        stub = self.query_one("#reg-stub", Switch).value
+        no_backup = not self.query_one("#reg-backup", Switch).value
+        if store == "hermes":
+            opts = HermesRegisterOptions(
+                source=self.entry.harness,
+                path=str(self.entry.path),
+                db=self.query_one("#hermes-db", Input).value.strip() or None,
+                model=self.query_one("#hermes-model", Input).value.strip() or None,
+                title=title,
+                session_id=session_id,
+                no_backup=no_backup,
+                stub_open_calls=stub,
+            )
+        else:
+            cwd = self.query_one("#codex-cwd", Input).value.strip()
+            if not cwd:
+                self.query_one("#reg-errors", Static).update(
+                    "[b red]Codex registration needs the project cwd it will "
+                    "resume from[/]"
+                )
+                return
+            opts = CodexRegisterOptions(
+                source=self.entry.harness,
+                path=str(self.entry.path),
+                cwd=cwd,
+                codex_home=self.query_one("#codex-home", Input).value.strip() or None,
+                title=title,
+                model=self.query_one("#codex-model", Input).value.strip() or None,
+                model_provider=self.query_one("#codex-provider", Input).value.strip()
+                or "openai",
+                session_id=session_id,
+                no_backup=no_backup,
+                stub_open_calls=stub,
+            )
+        self.app.push_screen(RegisterPlanScreen(store, opts))
+
+
+class RegisterPlanScreen(Screen):
+    """Everything the registration will do, shown BEFORE the SQLite mutation."""
+
+    BINDINGS = [("escape", "back", "Back")]
+
+    def __init__(self, store: str, opts) -> None:
+        super().__init__()
+        self.store = store
+        self.opts = opts
+        self.plan = None
+        self._writing = False
+
+    def action_back(self) -> None:
+        if not self._writing:
+            self.app.pop_screen()
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with VerticalScroll():
+            yield Static("planning registration (nothing written yet)…", id="plan-body")
+        with Horizontal(id="plan-buttons"):
+            yield Button("Register", variant="success", id="register", disabled=True)
+            yield Button("Cancel", id="plan-cancel")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self._prepare()
+
+    @work(thread=True, exclusive=True)
+    def _prepare(self) -> None:
+        from .register import prepare_codex_register, prepare_hermes_register
+
+        if self.store == "hermes":
+            plan = prepare_hermes_register(
+                self.opts, hermes_home=getattr(self.app, "hermes_home", None)
+            )
+        else:
+            plan = prepare_codex_register(self.opts)
+        self.app.call_from_thread(self._render_plan, plan)
+
+    def _render_plan(self, plan) -> None:
+        self.plan = plan
+        body = self.query_one("#plan-body", Static)
+        if plan.error:
+            body.update(
+                f"[b red]cannot register[/]\n\n{escape(plan.error)}\n\nescape to go back"
+            )
+            return
+        lines = [
+            f"[b]store[/]        {self.store} -> {escape(str(plan.db_path))}",
+            f"[b]session id[/]   {escape(str(plan.session_id))}",
+            f"[b]model[/]        {escape(plan.model or '(source model id)')}",
+            f"[b]backup[/]       "
+            + ("taken before writing" if not self.opts.no_backup else "[yellow]DISABLED[/]"),
+        ]
+        if plan.warnings:
+            lines.append(f"\n[b]{len(plan.warnings)} conversion note(s):[/]")
+            lines.extend(f"  [yellow]- {escape(w)}[/]" for w in plan.warnings)
+        else:
+            lines.append("\n[green]lossless registration (no warnings).[/]")
+        for note in plan.notes:
+            lines.append(f"[dim]note: {escape(note)}[/]")
+        lines.append("\n[b]equivalent CLI command:[/]")
+        lines.append(f"  [dim]{escape(plan.cli_command)}[/]")
+        body.update("\n".join(lines))
+        self.query_one("#register", Button).disabled = False
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "plan-cancel":
+            self.action_back()
+        elif (
+            event.button.id == "register"
+            and self.plan is not None
+            and self.plan.error is None
+            and not self._writing
+        ):
+            self._writing = True
+            self.query_one("#register", Button).disabled = True
+            self.query_one("#plan-cancel", Button).disabled = True
+            self._execute()
+
+    @work(thread=True, exclusive=True)
+    def _execute(self) -> None:
+        from .register import execute_register
+
+        outcome = execute_register(self.plan)
+        self.app.call_from_thread(self.app.push_screen, RegisterResultScreen(outcome))
+
+
+class RegisterResultScreen(Screen):
+    """Outcome of the registration: rows written, backup path, resume hint."""
+
+    BINDINGS = [
+        ("n", "new_conversion", "Another session"),
+        ("q", "quit", "Quit"),
+    ]
+
+    def __init__(self, outcome) -> None:
+        super().__init__()
+        self.outcome = outcome
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with VerticalScroll():
+            yield Static(self._body(), id="reg-result-body")
+        yield Footer()
+
+    def _body(self) -> str:
+        o = self.outcome
+        lines = []
+        if o.backup_path:
+            lines.append(f"backed up store -> {escape(str(o.backup_path))}")
+        if o.error:
+            lines.append(f"\n[b red]registration failed:[/] {escape(o.error)}")
+        else:
+            lines.append(
+                f"[green]registered session {escape(str(o.session_id))} "
+                f"into {escape(str(o.db_path))}[/]"
+            )
+            if o.rollout_path:
+                lines.append(f"wrote Codex rollout -> {escape(str(o.rollout_path))}")
+            if o.resume_hint:
+                lines.append(f"\n[b]resume with:[/]  {escape(o.resume_hint)}")
+        lines.append("\n[dim]n for another session, q to quit[/]")
         return "\n".join(lines)
 
     def action_new_conversion(self) -> None:
