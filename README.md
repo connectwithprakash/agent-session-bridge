@@ -70,6 +70,16 @@ CLI command — before any file or database is touched; registration backs up
 the store first by default, and the planning phase opens live stores
 read-only.
 
+Working with an agent instead? The repo ships an agent skill
+([`skills/session-handoff`](skills/session-handoff/SKILL.md)) that teaches
+any harness's agent to hand off its current session to another harness.
+Install it machine-wide into every harness found on the box:
+
+```bash
+session-bridge install-skill        # symlinks into ~/.claude, ~/.codex, ~/.hermes skills dirs
+session-bridge install-skill --copy # copies instead (survives uninstall, goes stale on upgrade)
+```
+
 Inspect a session's structure:
 
 ```bash

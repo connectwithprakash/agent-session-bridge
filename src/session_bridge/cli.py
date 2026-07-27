@@ -286,6 +286,30 @@ def cmd_tui(args: argparse.Namespace) -> int:
     return run_tui()
 
 
+def cmd_install_skill(args: argparse.Namespace) -> int:
+    """Distribute the packaged session-handoff skill to installed harnesses."""
+    from pathlib import Path
+
+    from .skill_install import HARNESS_HOMES, install_skill
+
+    homes = {name: Path(path) for name, path in HARNESS_HOMES.items()}
+    results = install_skill(homes, copy=args.copy, force=args.force)
+    failed = False
+    for r in results:
+        if r.action == "error":
+            failed = True
+            print(f"{r.harness}: ERROR — {r.detail}", file=sys.stderr)
+        else:
+            print(f"{r.harness}: {r.action} — {r.detail}")
+    if all(r.action == "skipped" for r in results):
+        print(
+            "no harness homes found (~/.claude, ~/.codex, ~/.hermes) — nothing installed",
+            file=sys.stderr,
+        )
+        return 1
+    return 1 if failed else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="session-bridge", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -382,6 +406,22 @@ def build_parser() -> argparse.ArgumentParser:
              "(requires: pip install 'session-bridge[tui]')",
     )
     tui.set_defaults(func=cmd_tui)
+
+    skill = sub.add_parser(
+        "install-skill",
+        help="link the session-handoff agent skill into every installed "
+             "harness's skills dir (~/.claude, ~/.codex, ~/.hermes)",
+    )
+    skill.add_argument(
+        "--copy", action="store_true",
+        help="copy instead of symlink (survives uninstalling session-bridge, "
+             "but goes stale on upgrades)",
+    )
+    skill.add_argument(
+        "--force", action="store_true",
+        help="replace an existing differing skill at the target path",
+    )
+    skill.set_defaults(func=cmd_install_skill)
     return parser
 
 
