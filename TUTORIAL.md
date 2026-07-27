@@ -145,6 +145,30 @@ context. Verified end-to-end: the resumed session recalls its prior history.
 Because the handshake is the first message, once a target loads the session the
 agent picks up knowing exactly where the previous one left off.
 
+**Codex target (one command).** Codex also needs more than a rollout file: it
+indexes resumable sessions in `~/.codex/state_5.sqlite`. Use `register-codex`;
+it validates that local store, creates a SQLite backup, writes the rollout, and
+adds the matching `threads` row:
+
+```bash
+session-bridge register-codex --from hermes SESSION.jsonl \
+  --cwd ~/Developer/myproject --title "resumed from Hermes"
+# backed up Codex state_5.sqlite -> ...
+# registered session <uuid> into ~/.codex/state_5.sqlite
+# resume with:  (cd ~/Developer/myproject && codex resume <uuid>)
+```
+
+`--cwd` must be an existing project directory. Run the printed resume command
+from that directory; it gives Codex the same workspace context as the imported
+session. Do not manually copy a rollout into `~/.codex/sessions/`: without the
+SQLite index row, `codex resume` cannot discover it. If the source stopped with
+an open tool call, add `--stub-open-calls` after you have reviewed the pending
+state from step 2.
+
+This path was live-recall verified with Codex CLI 0.145.0: an imported session
+resumed through `codex exec resume` and returned a unique fact that appeared
+only in the imported transcript.
+
 ---
 
 ## Full worked example: Hermes → Claude Code
@@ -229,10 +253,16 @@ by session-bridge. Read this before continuing.
 - **Conversion notes look alarming:** they're informational, not errors. The
   conversation core (messages, tool calls, results) always transfers; the notes
   only flag degraded extras.
-- **Codex sessions that used tools:** the Codex tool-call path follows the
-  documented format but has not yet been validated against a real tool-using
-  Codex log (see README "Known limitations").
+- **Codex schema version changed:** `register-codex` validates the local
+  `state_5.sqlite` `threads` schema and stops rather than writing an incompatible
+  index. Re-run the authenticated live-resume check after upgrading Codex.
+- **Codex session is not in the resume picker:** use `register-codex`, not a
+  manual rollout copy. Ensure `--cwd` is the directory from which you run
+  `codex resume <uuid>`.
+- **Codex sessions that used tools:** tool-call parsing and round-trip rendering
+  are covered against a real tool-using Codex session. As with every
+  cross-provider conversion, inspect the conversion notes and resume handshake
+  before continuing work that depends on tool state.
 
 For the format-level detail behind all this, see
 [`docs/schema-reference.md`](docs/schema-reference.md).
-```
