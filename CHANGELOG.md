@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.2.2...v0.2.3) (2026-07-28)
+
+
+### Bug Fixes
+
+* **codex:** assistant turns survive resume (phase + agent_message events) ([2e221dc](https://github.com/connectwithprakash/agent-session-bridge/commit/2e221dc88efb8c55165b90d24f9817d67496d599))
+
 ## [0.2.2](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.2.1...v0.2.2) (2026-07-28)
 
 
