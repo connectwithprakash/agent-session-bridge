@@ -138,10 +138,10 @@ def test_convert_flow_end_to_end(tmp_path):
             assert isinstance(app.screen, ResultScreen)
             assert app.screen.outcome.error is None
             assert (out_dir / "converted.jsonl").exists()
-            # A codex-targeted convert without registration must warn that the
-            # file won't appear in Codex's resume picker (found the hard way).
+            # This flow targets claude-code without placement, so the result
+            # screen must warn that the file alone is not resumable.
             body = str(app.screen.query_one("#result-body", Static).render())
-            assert "resume picker" in body and "Register" in body
+            assert "heads up" in body and "Enable placement" in body
 
             await pilot.press("n")
             await pilot.pause(0.2)
