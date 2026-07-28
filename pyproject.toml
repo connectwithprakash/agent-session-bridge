@@ -38,6 +38,9 @@ tui = ["textual>=1.0"]
 
 [project.scripts]
 session-bridge = "session_bridge.cli:main"
+# Alias matching the PyPI distribution name, so `uvx agent-session-bridge`
+# and muscle-memory from `pip install agent-session-bridge` both work.
+agent-session-bridge = "session_bridge.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

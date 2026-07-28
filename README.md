@@ -72,8 +72,9 @@ pip install 'agent-session-bridge[tui]'   # with the interactive TUI
 uvx agent-session-bridge --help           # no-install run
 ```
 
-(The PyPI distribution is `agent-session-bridge`; the command it installs is
-`session-bridge`.) From source:
+Installs the `session-bridge` command (docs use that name); an
+`agent-session-bridge` alias is included, so either name runs the same CLI.
+From source:
 
 ```bash
 cd session-bridge
