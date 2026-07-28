@@ -1,6 +1,6 @@
 # session-bridge
 
-[![test](https://github.com/connectwithprakash/session-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/connectwithprakash/session-bridge/actions/workflows/test.yml)
+[![test](https://github.com/connectwithprakash/agent-session-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/connectwithprakash/agent-session-bridge/actions/workflows/test.yml)
 [![PyPI](https://img.shields.io/pypi/v/agent-session-bridge)](https://pypi.org/project/agent-session-bridge/)
 [![Python](https://img.shields.io/pypi/pyversions/agent-session-bridge)](https://pypi.org/project/agent-session-bridge/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)

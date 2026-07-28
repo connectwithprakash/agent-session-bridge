@@ -27,9 +27,9 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/connectwithprakash/session-bridge"
-Repository = "https://github.com/connectwithprakash/session-bridge"
-Changelog = "https://github.com/connectwithprakash/session-bridge/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/connectwithprakash/agent-session-bridge"
+Repository = "https://github.com/connectwithprakash/agent-session-bridge"
+Changelog = "https://github.com/connectwithprakash/agent-session-bridge/blob/main/CHANGELOG.md"
 "Project page" = "https://www.connectwithprakash.com/project/session-bridge"
 
 [project.optional-dependencies]

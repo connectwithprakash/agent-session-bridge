@@ -35,14 +35,21 @@ conventional commits on main
 ## Troubleshooting
 
 - **Publish job fails with an OIDC/trusted-publishing error:** the PyPI
-  trusted publisher must exist (pypi.org -> Publishing: project
-  `session-bridge`, owner `connectwithprakash`, workflow `release.yml`,
-  environment `pypi`). Register it, then re-run just the failed job.
+  trusted publisher must exist and every field must match the workflow's
+  claims exactly (pypi.org -> Publishing: project `agent-session-bridge`,
+  owner `connectwithprakash`, repository `agent-session-bridge`, workflow
+  `release.yml`, environment `pypi`). The failed job's log prints the actual
+  claims GitHub sent — trust those over memory. Fix, then re-run just the
+  failed job.
 - **release-please fails to create the PR:** the repo setting "Allow GitHub
   Actions to create and approve pull requests" must be enabled
   (`gh api -X PUT repos/<repo>/actions/permissions/workflow -F can_approve_pull_request_reviews=true`).
 - **No release PR appears:** there are no releasable commits (only
   docs/chore/test since the last tag). That is correct behavior.
+- **Version jumps higher than expected after deleting a tag:** release-please
+  also reads its own merged `chore(main): release X.Y.Z` commits in history,
+  so deleting a release/tag does not roll the version back. Accept the bump;
+  do not fight it by hand-editing versions.
 
 ## Homebrew formula (connectwithprakash/homebrew-tap)
 
