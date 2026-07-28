@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.1](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.2.0...v0.2.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **tui:** warn when a converted file will not be resumable ([695a45f](https://github.com/connectwithprakash/agent-session-bridge/commit/695a45fdcd8f3b11c1eb28ffa02fe9271991ddb8))
+
+
+### Documentation
+
+* add Homebrew install option ([4f955c0](https://github.com/connectwithprakash/agent-session-bridge/commit/4f955c09a6fc1ec9e002c1e78fd75d1d3bdd1186))
+* record main branch-protection posture and its release-please constraints ([e1fe10e](https://github.com/connectwithprakash/agent-session-bridge/commit/e1fe10e2e1b293e2a3759cb6ae19384de4ef6885))
+
 ## [0.2.0](https://github.com/connectwithprakash/session-bridge/compare/v0.1.0...v0.2.0) (2026-07-28)
 
 
