@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "session-bridge"
+name = "agent-session-bridge"
 version = "0.1.0"
 description = "Local-first cross-harness agent-session portability: export a live coding-agent session from one harness and resume it in another."
 readme = "README.md"

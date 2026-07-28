@@ -279,7 +279,7 @@ def cmd_tui(args: argparse.Namespace) -> int:
         # half-installed textual, which should get the same actionable hint.
         print(
             "the TUI needs the optional 'textual' dependency:\n"
-            "  pip install 'session-bridge[tui]'",
+            "  pip install 'agent-session-bridge[tui]'",
             file=sys.stderr,
         )
         return 2
@@ -314,7 +314,7 @@ def _package_version() -> str:
     from importlib.metadata import PackageNotFoundError, version
 
     try:
-        return version("session-bridge")
+        return version("agent-session-bridge")
     except PackageNotFoundError:  # running from a source tree without install
         return "unknown"
 
@@ -415,7 +415,7 @@ def build_parser() -> argparse.ArgumentParser:
     tui = sub.add_parser(
         "tui",
         help="interactive session picker/converter "
-             "(requires: pip install 'session-bridge[tui]')",
+             "(requires: pip install 'agent-session-bridge[tui]')",
     )
     tui.set_defaults(func=cmd_tui)
 

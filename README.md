@@ -1,8 +1,8 @@
 # session-bridge
 
 [![test](https://github.com/connectwithprakash/session-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/connectwithprakash/session-bridge/actions/workflows/test.yml)
-[![PyPI](https://img.shields.io/pypi/v/session-bridge)](https://pypi.org/project/session-bridge/)
-[![Python](https://img.shields.io/pypi/pyversions/session-bridge)](https://pypi.org/project/session-bridge/)
+[![PyPI](https://img.shields.io/pypi/v/agent-session-bridge)](https://pypi.org/project/agent-session-bridge/)
+[![Python](https://img.shields.io/pypi/pyversions/agent-session-bridge)](https://pypi.org/project/agent-session-bridge/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Local-first, cross-harness **agent-session portability**. Export a coding-agent
@@ -65,6 +65,15 @@ source.jsonl ─▶ reader ─▶ IR (Session: messages, tools, pending) ─▶ 
   into a resume preamble injected as the first message of the resumed session.
 
 ## Install
+
+```bash
+pip install agent-session-bridge          # CLI only
+pip install 'agent-session-bridge[tui]'   # with the interactive TUI
+uvx agent-session-bridge --help           # no-install run
+```
+
+(The PyPI distribution is `agent-session-bridge`; the command it installs is
+`session-bridge`.) From source:
 
 ```bash
 cd session-bridge

@@ -28,7 +28,7 @@ conventional commits on main
 
 1. Confirm CI is green on `main` and the release PR's changelog reads sanely.
 2. Merge the release PR (squash). Watch `gh run list --workflow=release`.
-3. Verify publish: `curl -s https://pypi.org/pypi/session-bridge/json | jq .info.version`
+3. Verify publish: `curl -s https://pypi.org/pypi/agent-session-bridge/json | jq .info.version`
    and `uvx session-bridge@latest --version` from a clean shell.
 4. Update the Homebrew formula (below) when the release is user-facing.
 
@@ -50,7 +50,7 @@ The formula builds from the PyPI sdist and bundles the `tui` extra so brew
 users get the full experience.
 
 1. In the tap repo: update `url`/`sha256` to the new sdist
-   (`https://pypi.org/pypi/session-bridge/json` lists them under `urls`).
+   (`https://pypi.org/pypi/agent-session-bridge/json` lists them under `urls`).
 2. Regenerate dependency resources: `brew update-python-resources session-bridge`
    (covers textual and its dependencies).
 3. Verify locally before pushing: `brew install --build-from-source ./Formula/session-bridge.rb`

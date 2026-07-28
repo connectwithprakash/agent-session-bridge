@@ -37,4 +37,4 @@ def test_tui_missing_textual_prints_install_hint(monkeypatch, capsys):
     rc = main(["tui"])
     assert rc == 2
     err = capsys.readouterr().err
-    assert "session-bridge[tui]" in err
+    assert "agent-session-bridge[tui]" in err
