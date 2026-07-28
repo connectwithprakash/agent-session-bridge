@@ -44,8 +44,10 @@ conventional commits on main
 - **release-please fails to create the PR:** the repo setting "Allow GitHub
   Actions to create and approve pull requests" must be enabled
   (`gh api -X PUT repos/<repo>/actions/permissions/workflow -F can_approve_pull_request_reviews=true`).
-- **No release PR appears:** there are no releasable commits (only
-  docs/chore/test since the last tag). That is correct behavior.
+- **A release PR is always open, sometimes docs-only:** release-please keeps
+  a rolling release PR that accumulates commits (docs included, as a patch
+  proposal). Leaving it unmerged is the steady state; merge it only when it
+  contains changes users should get. Never close it, it will recreate.
 - **Version jumps higher than expected after deleting a tag:** release-please
   also reads its own merged `chore(main): release X.Y.Z` commits in history,
   so deleting a release/tag does not roll the version back. Accept the bump;
