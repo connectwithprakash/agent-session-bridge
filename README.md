@@ -67,9 +67,10 @@ source.jsonl ─▶ reader ─▶ IR (Session: messages, tools, pending) ─▶ 
 ## Install
 
 ```bash
-uv tool install 'agent-session-bridge[tui]'   # recommended: CLI + TUI, isolated env
-uvx agent-session-bridge --help               # or: no-install run
-pip install 'agent-session-bridge[tui]'       # or: plain pip
+uv tool install 'agent-session-bridge[tui]'          # recommended: CLI + TUI, isolated env
+brew install connectwithprakash/tap/session-bridge   # or: Homebrew (TUI included)
+uvx agent-session-bridge --help                      # or: no-install run
+pip install 'agent-session-bridge[tui]'              # or: plain pip
 ```
 
 Installs the `session-bridge` command (docs use that name); an
