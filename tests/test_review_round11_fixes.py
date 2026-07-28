@@ -34,7 +34,11 @@ def test_codex_preserves_empty_text_reasoning_block(tmp_path):
     assert _reasoning_count(back) == 1
 
 
-def test_empty_reasoning_survives_claude_codex_claude(tmp_path):
+def test_empty_reasoning_dropped_with_disclosure_on_claude_return(tmp_path):
+    """Empty reasoning survives INTO codex, but cannot return into a
+    claude-code transcript: the Anthropic API rejects empty thinking blocks
+    on resume, which would make the whole output unresumable. The drop must
+    be disclosed instead."""
     src = tmp_path / "in.jsonl"
     src.write_text(
         json.dumps({
@@ -49,11 +53,15 @@ def test_empty_reasoning_survives_claude_codex_claude(tmp_path):
     h1 = convert("claude-code", "codex", src, inject_handshake=False)
     f1 = tmp_path / "codex.jsonl"
     f1.write_text("\n".join(json.dumps(r) for r in h1.records) + "\n", encoding="utf-8")
+    # presence still crosses into codex
+    from session_bridge.readers.codex import read_codex
+    assert _reasoning_count(read_codex(f1)) == 1
     h2 = convert("codex", "claude-code", f1, inject_handshake=False)
     f2 = tmp_path / "back.jsonl"
     f2.write_text("\n".join(json.dumps(r) for r in h2.records) + "\n", encoding="utf-8")
     from session_bridge.readers.claude_code import read_claude_code
-    assert _reasoning_count(read_claude_code(f2)) == 1
+    assert _reasoning_count(read_claude_code(f2)) == 0
+    assert any("empty thinking" in w for w in h2.report.warnings)
 
 
 def test_hermes_reports_empty_reasoning_loss():

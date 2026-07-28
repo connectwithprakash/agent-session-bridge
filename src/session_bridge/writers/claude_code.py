@@ -23,7 +23,12 @@ def _assistant_content(msg: Message) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     for b in msg.content:
         if b.type is BlockType.REASONING:
-            blocks.append({"type": "thinking", "thinking": b.text or "", "signature": ""})
+            # An empty reasoning block (a presence marker from sources that
+            # store reasoning opaquely, e.g. Hermes codex_reasoning_items) is
+            # rejected by the Anthropic API on resume ("each thinking block
+            # must contain thinking"), so it cannot be preserved here.
+            if (b.text or "").strip():
+                blocks.append({"type": "thinking", "thinking": b.text, "signature": ""})
         elif b.type is BlockType.TEXT:
             blocks.append({"type": "text", "text": b.text or ""})
         elif b.type is BlockType.TOOL_CALL:
@@ -78,6 +83,16 @@ def _user_content(msg: Message) -> Any:
 
 def write_claude_code(session: Session) -> tuple[list[dict[str, Any]], ConversionReport]:
     report = report_losses(session, "claude-code")
+    if any(
+        b.type is BlockType.REASONING and not (b.text or "").strip()
+        for m in session.messages
+        for b in m.content
+    ):
+        report.warn(
+            "reasoning blocks with no visible text (opaque-source presence "
+            "markers) are dropped: the Anthropic API rejects empty thinking "
+            "blocks when the transcript is resumed."
+        )
     records: list[dict[str, Any]] = []
 
     # Preserve original uids/links when present; else synthesize a linear chain.

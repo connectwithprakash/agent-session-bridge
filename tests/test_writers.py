@@ -120,3 +120,34 @@ def test_to_hermes_warns_when_source_has_open_tool_call(tmp_path):
     assert any("no matching result" in w.lower() or "open tool call" in w.lower()
                or "pending" in w.lower()
                for w in report.warnings)
+
+
+def test_claude_writer_drops_empty_reasoning_and_discloses():
+    """Anthropic rejects empty thinking blocks on resume, so presence-marker
+    reasoning (e.g. Hermes codex_reasoning_items) cannot reach the output."""
+    from session_bridge.ir import ContentBlock, Message, Role, Session, SessionMeta
+    from session_bridge.writers.claude_code import write_claude_code
+
+    session = Session(
+        meta=SessionMeta(source_harness="hermes", session_id="s1"),
+        messages=(
+            Message(role=Role.USER, content=(ContentBlock.text_block("hi"),)),
+            Message(
+                role=Role.ASSISTANT,
+                content=(
+                    ContentBlock.reasoning(""),
+                    ContentBlock.text_block("hello"),
+                ),
+            ),
+        ),
+    )
+    records, report = write_claude_code(session)
+    thinking = [
+        b
+        for r in records
+        if isinstance(r.get("message", {}).get("content"), list)
+        for b in r["message"]["content"]
+        if b.get("type") == "thinking"
+    ]
+    assert not thinking
+    assert any("empty thinking" in w for w in report.warnings)

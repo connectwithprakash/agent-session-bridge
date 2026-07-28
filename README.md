@@ -28,10 +28,14 @@ and fail closed (no write) when it doesn't match.
 
 | Harness | Last verified against | Verification |
 |---|---|---|
-| Claude Code | 2.1.x transcripts | Round-trip + live `claude --resume` recall of a converted-only fact |
-| Codex | Codex CLI 0.145.0 (`state_5.sqlite`) | Live `codex resume` recall of a converted-only sentinel, and the registered session listed in the resume picker |
-| Hermes | `state.db` schema as of 2026-07 | Live `hermes --resume` replay of a registered session |
+| Claude Code | 2.1.212 | Live `claude --resume` recall of user AND assistant sentinels, from claude, codex, and hermes sources |
+| Codex | Codex CLI 0.145.0 (`state_5.sqlite`) | Live `codex resume` recall of both-role sentinels from claude and hermes sources, and registered sessions listed in the resume picker |
+| Hermes | `state.db` schema as of 2026-07-28 | Live `hermes --resume` replay with both-role recall, from claude and codex sources |
 | Python | 3.11 – 3.13 | CI test matrix |
+
+All six directed conversion pairs were live-verified on real installs on
+2026-07-28 (each source harness resumed in each other target, with the model
+quoting both a user turn and one of its own prior replies).
 
 A newer harness version usually still works (formats drift rarely), but treat
 anything beyond this table as unverified: run `session-bridge inspect` first,
