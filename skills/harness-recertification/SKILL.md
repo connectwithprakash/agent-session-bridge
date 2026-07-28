@@ -29,6 +29,11 @@ appeared.
 4. **Pass = the model recalls it.** A resume that opens but answers from a
    blank context is a FAIL (Hermes does this when `--model` names a model it
    cannot route; see README).
+4b. **Hermes verification must use the interactive TUI** (drive it headlessly
+   with vhs if needed): `hermes -z` oneshot mode silently ignores
+   `--resume` and spawns a fresh session, so a -z reply proves nothing —
+   confirm which session actually answered by checking state.db, not the
+   reply text.
 5. **Also verify the session is LISTED in the target's own picker/session
    list**, not only that direct-id resume works. The two paths have different
    requirements: Codex's picker demands an `event_msg` `user_message` record
