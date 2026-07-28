@@ -399,7 +399,9 @@ class DryRunScreen(Screen):
             self.opts,
             claude_home=getattr(self.app, "claude_home", None),
         )
-        self.app.call_from_thread(self.app.push_screen, ResultScreen(outcome))
+        self.app.call_from_thread(
+            self.app.push_screen, ResultScreen(outcome, target=self.opts.target)
+        )
 
 
 class ResultScreen(Screen):
@@ -410,9 +412,10 @@ class ResultScreen(Screen):
         ("q", "quit", "Quit"),
     ]
 
-    def __init__(self, outcome) -> None:
+    def __init__(self, outcome, target: str | None = None) -> None:
         super().__init__()
         self.outcome = outcome
+        self.target = target
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -435,6 +438,22 @@ class ResultScreen(Screen):
             lines.append(f"\n[b]resume with:[/]  {escape(o.resume_hint)}")
         if o.error:
             lines.append(f"\n[b red]error:[/] {escape(o.error)}")
+        # A converted file alone is not resumable in every harness; say so
+        # here, where the user is about to go looking for their session.
+        if not o.error and not o.placed_path:
+            if self.target in ("codex", "hermes"):
+                lines.append(
+                    f"\n[yellow]heads up:[/] {self.target} lists sessions from its own "
+                    f"store, so this file will NOT appear in its resume picker. "
+                    f"To make it resumable, use Register ([b]g[/] on the summary "
+                    f"screen) instead."
+                )
+            elif self.target == "claude-code":
+                lines.append(
+                    "\n[yellow]heads up:[/] `claude --resume` only finds sessions "
+                    "under ~/.claude/projects. Enable placement on the options "
+                    "screen to make this resumable."
+                )
         lines.append("\n[dim]n for another conversion, q to quit[/]")
         return "\n".join(lines)
 
