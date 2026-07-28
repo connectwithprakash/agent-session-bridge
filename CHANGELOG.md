@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.2.3...v0.2.4) (2026-07-28)
+
+
+### Bug Fixes
+
+* **claude-code:** drop empty reasoning blocks the API rejects on resume ([269a874](https://github.com/connectwithprakash/agent-session-bridge/commit/269a874fabf80726166b62d238a94e8833b77cde))
+
 ## [0.2.3](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.2.2...v0.2.3) (2026-07-28)
 
 
