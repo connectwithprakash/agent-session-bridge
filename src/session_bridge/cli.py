@@ -310,8 +310,20 @@ def cmd_install_skill(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _package_version() -> str:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("session-bridge")
+    except PackageNotFoundError:  # running from a source tree without install
+        return "unknown"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="session-bridge", description=__doc__)
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {_package_version()}"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     insp = sub.add_parser("inspect", help="parse a session and print its structure")

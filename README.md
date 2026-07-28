@@ -14,6 +14,24 @@ Supports three harnesses today:
 
 No cloud. Everything runs against files already on your disk.
 
+## Supported versions
+
+session-bridge's real dependencies are other tools' storage formats, which can
+change without notice. This table states exactly what each reader/registrar was
+last verified against; registration paths validate the store schema at runtime
+and fail closed (no write) when it doesn't match.
+
+| Harness | Last verified against | Verification |
+|---|---|---|
+| Claude Code | 2.1.x transcripts | Round-trip + live `claude --resume` recall of a converted-only fact |
+| Codex | Codex CLI 0.145.0 (`state_5.sqlite`) | Live `codex resume` recall of a converted-only sentinel |
+| Hermes | `state.db` schema as of 2026-07 | Live `hermes --resume` replay of a registered session |
+| Python | 3.11 – 3.13 | CI test matrix |
+
+A newer harness version usually still works (formats drift rarely), but treat
+anything beyond this table as unverified: run `session-bridge inspect` first,
+and expect SQLite registration to refuse cleanly if the schema moved.
+
 ## Why
 
 Each harness writes an incompatible session log, and nothing bridges them.

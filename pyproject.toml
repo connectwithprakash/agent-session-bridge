@@ -9,7 +9,28 @@ description = "Local-first cross-harness agent-session portability: export a liv
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
+authors = [{ name = "Prakash Chaudhary" }]
+keywords = ["ai-agents", "claude-code", "codex", "session", "cli", "tui"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Utilities",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/connectwithprakash/session-bridge"
+Repository = "https://github.com/connectwithprakash/session-bridge"
+Changelog = "https://github.com/connectwithprakash/session-bridge/blob/main/CHANGELOG.md"
+"Project page" = "https://www.connectwithprakash.com/project/session-bridge"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]

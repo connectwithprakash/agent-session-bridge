@@ -11,6 +11,17 @@ def test_tui_subcommand_registered():
     assert args.func.__name__ == "cmd_tui"
 
 
+def test_version_flag_prints_version(capsys):
+    import pytest
+
+    with pytest.raises(SystemExit) as exc:
+        build_parser().parse_args(["--version"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert out.startswith("session-bridge ")
+    assert out.strip() != "session-bridge unknown"
+
+
 def test_tui_missing_textual_prints_install_hint(monkeypatch, capsys):
     # Poisoning sys.modules makes `import textual` raise plain ImportError,
     # which is why cmd_tui catches ImportError rather than ModuleNotFoundError.
