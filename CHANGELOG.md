@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.2.1...v0.2.2) (2026-07-28)
+
+
+### Bug Fixes
+
+* **codex:** registered sessions now appear in the resume picker ([14c5d17](https://github.com/connectwithprakash/agent-session-bridge/commit/14c5d1745f7ae098b7b9b6f7c4b37054fd5c79b8))
+
 ## [0.2.1](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.2.0...v0.2.1) (2026-07-28)
 
 
