@@ -67,18 +67,17 @@ source.jsonl ─▶ reader ─▶ IR (Session: messages, tools, pending) ─▶ 
 ## Install
 
 ```bash
-pip install agent-session-bridge          # CLI only
-pip install 'agent-session-bridge[tui]'   # with the interactive TUI
-uvx agent-session-bridge --help           # no-install run
+uv tool install 'agent-session-bridge[tui]'   # recommended: CLI + TUI, isolated env
+uvx agent-session-bridge --help               # or: no-install run
+pip install 'agent-session-bridge[tui]'       # or: plain pip
 ```
 
 Installs the `session-bridge` command (docs use that name); an
 `agent-session-bridge` alias is included, so either name runs the same CLI.
-From source:
+Drop `[tui]` for the CLI without the interactive TUI. From source:
 
 ```bash
-cd session-bridge
-python3 -m pip install -e .
+cd session-bridge && uv sync --extra dev --extra tui   # or: python3 -m pip install -e .
 ```
 
 New here? [`TUTORIAL.md`](TUTORIAL.md) is a step-by-step walkthrough (find your
