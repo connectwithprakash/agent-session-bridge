@@ -1,5 +1,10 @@
 # session-bridge
 
+[![test](https://github.com/connectwithprakash/session-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/connectwithprakash/session-bridge/actions/workflows/test.yml)
+[![PyPI](https://img.shields.io/pypi/v/session-bridge)](https://pypi.org/project/session-bridge/)
+[![Python](https://img.shields.io/pypi/pyversions/session-bridge)](https://pypi.org/project/session-bridge/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Local-first, cross-harness **agent-session portability**. Export a coding-agent
 session from one harness and resume it in another when the original hits a usage
 limit or otherwise stops.

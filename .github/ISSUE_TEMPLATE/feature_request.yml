@@ -1,0 +1,22 @@
+name: Feature request
+description: A capability session-bridge should have
+labels: [enhancement]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: What are you trying to do?
+      description: The workflow or situation this would serve, not the implementation
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What the tool would do, ideally with an example invocation
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds you use today

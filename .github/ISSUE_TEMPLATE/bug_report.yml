@@ -1,0 +1,41 @@
+name: Bug report
+description: A conversion, registration, or TUI behavior that went wrong
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: session-bridge version
+      description: Output of `session-bridge --version`
+      placeholder: session-bridge 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: harnesses
+    attributes:
+      label: Harness versions involved
+      description: Source and target tool versions (e.g. `claude --version`, `codex --version`, Hermes build)
+      placeholder: Claude Code 2.1.9 -> Codex CLI 0.145.0
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: The exact command you ran and what it printed (stderr included)
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: inspect
+    attributes:
+      label: "`session-bridge inspect` output for the source session"
+      description: Run `session-bridge inspect --from <harness> <file>` on the source. Redact anything private; never paste transcript content.
+      render: shell
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+      description: What you expected to happen, and what happened instead
+    validations:
+      required: true

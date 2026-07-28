@@ -1,0 +1,24 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.13"]
+        extras: ["dev", "dev,tui"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+      # The suite must pass both with and without the optional TUI extra:
+      # pure modules never import textual, and the Pilot tests skip cleanly.
+      - run: uv run --python ${{ matrix.python }} ${{ matrix.extras == 'dev' && '--extra dev' || '--extra dev --extra tui' }} pytest
