@@ -23,6 +23,16 @@ def _codex_role(role: Role) -> str:
 
 
 def _msg_payload(role: str, text: str) -> dict[str, Any]:
+    if role == "assistant":
+        # Codex's history reconstruction keeps assistant messages by channel
+        # phase; without this the resumed model sees only the user turns.
+        block_type = "output_text"
+        return {
+            "type": "message",
+            "role": role,
+            "content": [{"type": block_type, "text": text}],
+            "phase": "final_answer",
+        }
     # Assistant emits output_text; user/system emit input_text.
     block_type = "output_text" if role == "assistant" else "input_text"
     return {"type": "message", "role": role, "content": [{"type": block_type, "text": text}]}
@@ -170,6 +180,24 @@ def write_codex(
                             "audio": [],
                             "local_audio": [],
                             "text_elements": [],
+                        },
+                    }
+                )
+        elif msg.role is Role.ASSISTANT:
+            # Same twin discipline for assistant turns: the transcript view
+            # renders from event_msg records, so without agent_message events
+            # a resumed session displays as user-messages-only.
+            assistant_text = msg.text()
+            if assistant_text.strip():
+                records.append(
+                    {
+                        "timestamp": ts,
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "agent_message",
+                            "message": assistant_text,
+                            "phase": "final_answer",
+                            "memory_citation": None,
                         },
                     }
                 )

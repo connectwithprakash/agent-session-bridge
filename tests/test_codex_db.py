@@ -343,6 +343,19 @@ def test_registration_matches_native_picker_requirements(tmp_path, monkeypatch):
     ]
     assert user_events, "picker requires an event_msg user_message in the rollout"
     assert user_events[0]["payload"]["message"].strip()
+    agent_events = [
+        r for r in records
+        if r.get("type") == "event_msg" and r["payload"].get("type") == "agent_message"
+    ]
+    assert agent_events, "transcript rendering requires agent_message events"
+    assistant_items = [
+        r for r in records
+        if r.get("type") == "response_item" and r["payload"].get("type") == "message"
+        and r["payload"].get("role") == "assistant"
+    ]
+    assert assistant_items and all(
+        i["payload"].get("phase") == "final_answer" for i in assistant_items
+    ), "history reconstruction drops assistant messages without a phase"
     conn = sqlite3.connect(home / "state_5.sqlite")
     row = dict(zip([c[0] for c in conn.execute("SELECT model, first_user_message, preview, cli_version FROM threads").description],
                    conn.execute("SELECT model, first_user_message, preview, cli_version FROM threads").fetchone()))

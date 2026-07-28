@@ -16,9 +16,12 @@ The core check is always the same shape: prove the target harness actually
 resumes a converted session with its context intact, not merely that a file
 appeared.
 
-1. **Seed a sentinel.** In the source harness, run a short real session that
-   states a unique fact ("the magic word is XYZZY-<random>") and uses at
-   least one tool call.
+1. **Seed TWO sentinels.** In the source harness, run a short real session
+   where the USER states a unique fact ("the magic word is XYZZY-<random>")
+   AND the ASSISTANT is made to reply with its own unique phrase, plus at
+   least one tool call. User-turn recall and assistant-turn recall fail
+   independently (Codex reconstructs them through different mechanisms), so
+   a user-only sentinel proves half the transfer.
 2. **Convert or register** into the target with session-bridge, exactly as a
    user would (use `--stub-open-calls` if the seed stopped mid-turn).
 3. **Live-resume in the target** (`claude --resume`, `codex resume`,
