@@ -48,6 +48,12 @@ conventional commits on main
   a rolling release PR that accumulates commits (docs included, as a patch
   proposal). Leaving it unmerged is the steady state; merge it only when it
   contains changes users should get. Never close it, it will recreate.
+- **Branch protection:** main has a ruleset blocking force-pushes and
+  deletion only. Do NOT add required status checks or required PRs without
+  planning around two facts: checks run after direct pushes (so requiring
+  them blocks the direct-push workflow), and release-please's PRs never
+  receive checks (default-token events don't trigger workflows), making the
+  release PR unmergeable unless the action gets a PAT or a bypass.
 - **Version jumps higher than expected after deleting a tag:** release-please
   also reads its own merged `chore(main): release X.Y.Z` commits in history,
   so deleting a release/tag does not roll the version back. Accept the bump;
