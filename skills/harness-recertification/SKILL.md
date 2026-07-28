@@ -26,6 +26,13 @@ appeared.
 4. **Pass = the model recalls it.** A resume that opens but answers from a
    blank context is a FAIL (Hermes does this when `--model` names a model it
    cannot route; see README).
+5. **Also verify the session is LISTED in the target's own picker/session
+   list**, not only that direct-id resume works. The two paths have different
+   requirements: Codex's picker demands an `event_msg` `user_message` record
+   in the rollout, a native-format filename (local time, no ms/Z suffix),
+   and populated index columns, none of which id-based resume checks. Codex
+   also re-syncs index rows FROM the rollout file, so the rollout is the
+   source of truth: fixing only the DB row gets silently reverted.
 
 Round-trip reads too: convert target -> IR -> target and diff; the fixtures in
 `tests/fixtures/` document the shapes each reader must keep parsing.

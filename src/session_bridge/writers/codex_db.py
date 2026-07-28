@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
+import subprocess
 import tempfile
 import time
 import uuid
@@ -79,6 +81,43 @@ def validate_codex_store(codex_home: str | Path) -> Path:
     finally:
         conn.close()
     return db_path
+
+
+def infer_codex_cli_version(codex_home: str | Path) -> str:
+    """The installed Codex CLI's version, for stamping imported sessions.
+
+    Asks the binary first (`codex --version` -> "codex-cli 0.145.0"): the
+    store's rows are not a trustworthy source because previously imported
+    sessions land there too, so inferring from rows can echo an earlier
+    import's value back. The newest store row is only the fallback when no
+    codex binary is on PATH; empty string for a fresh store, which Codex
+    tolerates (the column defaults to '' for pre-column rows).
+    """
+    exe = shutil.which("codex")
+    if exe:
+        try:
+            out = subprocess.run(
+                [exe, "--version"], capture_output=True, text=True, timeout=10
+            ).stdout.strip()
+            if out:
+                return out.split()[-1]
+        except (OSError, subprocess.SubprocessError):
+            pass
+    db_path = validate_codex_store(codex_home)
+    conn = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        row = conn.execute(
+            """
+            SELECT cli_version
+            FROM threads
+            WHERE cli_version IS NOT NULL AND cli_version != ''
+            ORDER BY recency_at_ms DESC, updated_at_ms DESC, updated_at DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        conn.close()
+    return row[0] if row else ""
 
 
 def infer_codex_model(codex_home: str | Path, model_provider: str = "openai") -> str | None:
@@ -161,6 +200,8 @@ def _thread_values(
         "tokens_used": 0,
         "has_user_event": int(bool(first_user_message)),
         "archived": 0,
+        # meta.version here is the TARGET Codex version (the registrar
+        # replaces the source harness's with the installed Codex's).
         "cli_version": session.meta.version or "",
         "first_user_message": first_user_message,
         "memory_mode": "enabled",
@@ -221,8 +262,13 @@ def register_codex_session(
 
     timestamp = started_at if started_at is not None else time.time()
     iso_timestamp = datetime.fromtimestamp(timestamp, UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-    day_path = datetime.fromtimestamp(timestamp, UTC).strftime("%Y/%m/%d")
-    rollout_path = home / "sessions" / day_path / f"rollout-{iso_timestamp.replace(':', '-')}-{session_id}.jsonl"
+    # The resume picker parses rollout filenames strictly: local time,
+    # second precision, no timezone suffix — matching what Codex itself
+    # writes. Record timestamps inside the file stay UTC.
+    local = datetime.fromtimestamp(timestamp)
+    day_path = local.strftime("%Y/%m/%d")
+    file_stamp = local.strftime("%Y-%m-%dT%H-%M-%S")
+    rollout_path = home / "sessions" / day_path / f"rollout-{file_stamp}-{session_id}.jsonl"
     if rollout_path.exists():
         raise CodexRegistrationError(f"Codex rollout already exists: {rollout_path}")
 
@@ -232,6 +278,9 @@ def register_codex_session(
         cwd=resolved_cwd,
         model=model,
         model_provider=model_provider,
+        # The source harness's version must not masquerade as Codex's;
+        # stamp the installed Codex's version observed from its own store.
+        version=infer_codex_cli_version(home),
     )
     target_session = replace(session, meta=target_meta)
     transcript_sandbox, index_sandbox = workspace_write_policies(resolved_cwd)

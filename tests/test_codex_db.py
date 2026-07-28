@@ -315,3 +315,70 @@ def test_cli_register_codex_backs_up_and_adds_handshake(tmp_path):
         ]
     ) == 0
     assert len(list(home.glob("state_5.sqlite.session-bridge-backup-*"))) == 2
+
+
+def test_registration_matches_native_picker_requirements(tmp_path, monkeypatch):
+    """The resume picker only lists sessions whose rollout carries an
+    event_msg user_message and whose filename matches the native pattern."""
+    import re
+
+    monkeypatch.setattr('session_bridge.writers.codex_db.shutil.which', lambda _: None)
+
+    home = tmp_path / "codex"
+    _make_codex_home(home)
+    session = _sample_session()
+    rollout = register_codex_session(
+        session, home, "1e8400e2-9b1d-4716-a4f6-426655440000",
+        cwd=str(tmp_path), title="picker check", model="gpt-5", model_provider="openai",
+    )
+    # Native filename: local time, no milliseconds/Z suffix.
+    assert re.fullmatch(
+        r"rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-[0-9a-f-]{36}\.jsonl",
+        rollout.name,
+    ), rollout.name
+    records = [json.loads(line) for line in rollout.read_text().splitlines()]
+    user_events = [
+        r for r in records
+        if r.get("type") == "event_msg" and r["payload"].get("type") == "user_message"
+    ]
+    assert user_events, "picker requires an event_msg user_message in the rollout"
+    assert user_events[0]["payload"]["message"].strip()
+    conn = sqlite3.connect(home / "state_5.sqlite")
+    row = dict(zip([c[0] for c in conn.execute("SELECT model, first_user_message, preview, cli_version FROM threads").description],
+                   conn.execute("SELECT model, first_user_message, preview, cli_version FROM threads").fetchone()))
+    conn.close()
+    assert row["model"] == "gpt-5"
+    assert row["first_user_message"].strip()
+    assert row["preview"].strip()
+    # The source harness's version must not masquerade as Codex's
+    # cli_version; a fresh isolated store has no native row to infer from.
+    assert row["cli_version"] == ""
+
+
+def test_cli_version_inferred_from_native_rows(tmp_path, monkeypatch):
+    monkeypatch.setattr('session_bridge.writers.codex_db.shutil.which', lambda _: None)
+    home = tmp_path / "codex"
+    _make_codex_home(home)
+    conn = sqlite3.connect(home / "state_5.sqlite")
+    conn.execute(
+        "INSERT INTO threads (id, rollout_path, created_at, updated_at, source, "
+        "model_provider, cwd, title, sandbox_policy, approval_mode, cli_version, "
+        "recency_at_ms, updated_at_ms) "
+        "VALUES (?, ?, 1, 1, 'cli', 'openai', '/tmp', 'native', '{}', 'on-request', "
+        "'0.145.0', 1, 1)",
+        (str(uuid.uuid4()), "/tmp/native.jsonl"),
+    )
+    conn.commit()
+    conn.close()
+    rollout = register_codex_session(
+        _sample_session(), home, "2e8400e2-9b1d-4716-a4f6-426655440000",
+        cwd=str(tmp_path), title="version check", model="gpt-5", model_provider="openai",
+    )
+    conn = sqlite3.connect(home / "state_5.sqlite")
+    got = conn.execute(
+        "SELECT cli_version FROM threads WHERE id='2e8400e2-9b1d-4716-a4f6-426655440000'"
+    ).fetchone()[0]
+    conn.close()
+    assert got == "0.145.0"
+    meta = json.loads(rollout.read_text().splitlines()[0])
+    assert meta["payload"]["cli_version"] == "0.145.0"

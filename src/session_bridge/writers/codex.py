@@ -150,5 +150,28 @@ def write_codex(
         # Preserve an otherwise-empty message so message count survives the round trip.
         if not emitted and msg.role in (Role.USER, Role.ASSISTANT, Role.SYSTEM):
             add(_msg_payload(role, ""), ts)
+        # Codex writes an event_msg twin for every user turn, and its resume
+        # picker only lists sessions whose rollout contains at least one
+        # user_message event — without this the imported session resumes by
+        # id but never appears in the picker. The reader ignores event_msg
+        # as a response_item duplicate, so round-trips are unaffected.
+        if msg.role is Role.USER:
+            user_text = msg.text()
+            if user_text.strip():
+                records.append(
+                    {
+                        "timestamp": ts,
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "user_message",
+                            "message": user_text,
+                            "images": [],
+                            "local_images": [],
+                            "audio": [],
+                            "local_audio": [],
+                            "text_elements": [],
+                        },
+                    }
+                )
 
     return records, report

@@ -29,7 +29,7 @@ and fail closed (no write) when it doesn't match.
 | Harness | Last verified against | Verification |
 |---|---|---|
 | Claude Code | 2.1.x transcripts | Round-trip + live `claude --resume` recall of a converted-only fact |
-| Codex | Codex CLI 0.145.0 (`state_5.sqlite`) | Live `codex resume` recall of a converted-only sentinel |
+| Codex | Codex CLI 0.145.0 (`state_5.sqlite`) | Live `codex resume` recall of a converted-only sentinel, and the registered session listed in the resume picker |
 | Hermes | `state.db` schema as of 2026-07 | Live `hermes --resume` replay of a registered session |
 | Python | 3.11 – 3.13 | CI test matrix |
 
