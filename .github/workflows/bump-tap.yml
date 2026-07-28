@@ -1,0 +1,74 @@
+name: bump-tap
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    secrets:
+      TAP_DEPLOY_KEY:
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Published PyPI version to point the formula at (e.g. 0.2.1)"
+        required: true
+        type: string
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: connectwithprakash/homebrew-tap
+          ssh-key: ${{ secrets.TAP_DEPLOY_KEY }}
+      - name: Update formula url/sha from PyPI
+        run: |
+          python3 - "${{ inputs.version }}" <<'EOF'
+          import json, re, sys, time, urllib.request
+
+          version = sys.argv[1].lstrip("v")  # accepts "0.2.1" or tag form "v0.2.1"
+          # PyPI can lag the publish by a moment; poll until the version serves.
+          for _ in range(30):
+              try:
+                  with urllib.request.urlopen(
+                      f"https://pypi.org/pypi/agent-session-bridge/{version}/json"
+                  ) as r:
+                      data = json.load(r)
+                  break
+              except Exception:
+                  time.sleep(10)
+          else:
+              sys.exit(f"PyPI never served agent-session-bridge {version}")
+
+          sdist = next(u for u in data["urls"] if u["packagetype"] == "sdist")
+          path = "Formula/session-bridge.rb"
+          s = open(path).read()
+          # Target only the main package url/sha pair (resource blocks have
+          # their own): match the agent_session_bridge sdist filename.
+          s, n1 = re.subn(
+              r'url "https://files\.pythonhosted\.org/[^"]*/agent_session_bridge-[^"]*\.tar\.gz"',
+              f'url "{sdist["url"]}"',
+              s,
+              count=1,
+          )
+          main_url_end = s.index("agent_session_bridge-")
+          sha_span = re.compile(r'sha256 "[0-9a-f]{64}"').search(s, main_url_end)
+          s = s[: sha_span.start()] + f'sha256 "{sdist["digests"]["sha256"]}"' + s[sha_span.end():]
+          assert n1 == 1, "main url not found"
+          open(path, "w").write(s)
+          print(f"formula -> {version}")
+          EOF
+      - name: Commit and push
+        run: |
+          if git diff --quiet; then
+            echo "formula already at this version; nothing to push"
+            exit 0
+          fi
+          git config user.name "release-bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          git add Formula/session-bridge.rb
+          git commit -m "session-bridge ${{ inputs.version }}"
+          git push
