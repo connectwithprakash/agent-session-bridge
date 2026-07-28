@@ -27,10 +27,20 @@ conventional commits on main
 ## Cutting a release
 
 1. Confirm CI is green on `main` and the release PR's changelog reads sanely.
-2. Merge the release PR (squash). Watch `gh run list --workflow=release`.
-3. Verify publish: `curl -s https://pypi.org/pypi/agent-session-bridge/json | jq .info.version`
-   and `uvx session-bridge@latest --version` from a clean shell.
-4. Update the Homebrew formula (below) when the release is user-facing.
+2. Merge the release PR (squash). Watch `gh run list --workflow=release` —
+   the chain runs tag -> GitHub release -> PyPI publish -> Homebrew formula
+   bump (the `bump-tap` job pushes to homebrew-tap over a deploy key).
+3. Verify: `curl -s https://pypi.org/pypi/agent-session-bridge/<version>/json | jq .info.version`
+   (the unversioned JSON endpoint can serve a ~15-minute CDN cache),
+   `uvx agent-session-bridge --version` from a clean shell, and the new
+   `session-bridge <version>` commit in homebrew-tap.
+4. Pull main afterward and run `uv sync`; commit the lockfile's own version
+   churn as a `chore:` (release-please does not manage `uv.lock`).
+
+The formula bump is also manually dispatchable (`gh workflow run bump-tap.yml
+-f version=<X.Y.Z>`), e.g. after fixing a failed run. It only rewrites the
+main url/sha pair; when a new textual release changes the dependency tree,
+regenerate the resource stanzas manually per the Homebrew section below.
 
 ## Troubleshooting
 

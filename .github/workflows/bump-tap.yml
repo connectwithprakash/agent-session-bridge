@@ -62,6 +62,8 @@ jobs:
           print(f"formula -> {version}")
           EOF
       - name: Commit and push
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           if git diff --quiet; then
             echo "formula already at this version; nothing to push"
@@ -70,5 +72,5 @@ jobs:
           git config user.name "release-bot"
           git config user.email "release-bot@users.noreply.github.com"
           git add Formula/session-bridge.rb
-          git commit -m "session-bridge ${{ inputs.version }}"
+          git commit -m "session-bridge ${VERSION#v}"
           git push
