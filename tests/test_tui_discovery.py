@@ -149,7 +149,7 @@ def test_preview_truncation(tmp_path):
     )
     (entry,) = scan_hermes(home)
     assert entry.preview is not None
-    assert len(entry.preview) <= 120
+    assert len(entry.preview) <= 240
     assert entry.preview.startswith("xxx")
 
 
@@ -175,7 +175,7 @@ def test_claude_preview_joins_text_blocks(tmp_path):
         "\n".join(json.dumps(r) for r in records) + "\n"
     )
     (entry,) = scan_claude_code(home)
-    assert entry.preview == "first part\nsecond part"
+    assert entry.preview == "first part second part"  # previews normalize whitespace
 
 
 def test_session_entry_is_frozen(tmp_path):
@@ -191,3 +191,98 @@ def test_entry_type(tmp_path):
         hermes_home=tmp_path / "no-hermes",
     )
     assert all(isinstance(e, SessionEntry) for e in entries)
+
+
+def test_codex_preview_skips_injected_context_via_event_msg(tmp_path):
+    """The first user response_item is often injected AGENTS.md context;
+    the event_msg user_message marks what the human actually typed."""
+    home = tmp_path / ".codex"
+    day = home / "sessions" / "2026" / "08" / "02"
+    day.mkdir(parents=True)
+    records = [
+        {"timestamp": "t", "type": "session_meta", "payload": {"id": "cx-9", "cwd": "/w"}},
+        {"timestamp": "t", "type": "response_item", "payload": {
+            "type": "message", "role": "user",
+            "content": [{"type": "input_text", "text": "# AGENTS.md instructions for /w\n<INSTRUCTIONS>..."}]}},
+        {"timestamp": "t", "type": "response_item", "payload": {
+            "type": "message", "role": "user",
+            "content": [{"type": "input_text", "text": "Hi, my name is Ray"}]}},
+        {"timestamp": "t", "type": "event_msg", "payload": {
+            "type": "user_message", "message": "Hi, my name is Ray"}},
+        {"timestamp": "t", "type": "response_item", "payload": {
+            "type": "message", "role": "assistant",
+            "content": [{"type": "output_text", "text": "Hello Ray!"}]}},
+        {"timestamp": "t", "type": "event_msg", "payload": {
+            "type": "agent_message", "message": "Hello Ray!", "phase": "final_answer"}},
+    ]
+    (day / "rollout-2026-08-02T15-01-54-cx-9.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in records) + "\n"
+    )
+    (entry,) = scan_codex(home)
+    assert entry.preview == "Hi, my name is Ray"
+    assert entry.last_preview == "Hello Ray!"
+    assert entry.last_role == "assistant"
+
+
+def test_codex_preview_fallback_skips_injected_without_event_msg(tmp_path):
+    home = tmp_path / ".codex"
+    day = home / "sessions" / "2026" / "08" / "02"
+    day.mkdir(parents=True)
+    records = [
+        {"timestamp": "t", "type": "session_meta", "payload": {"id": "cx-old", "cwd": "/w"}},
+        {"timestamp": "t", "type": "response_item", "payload": {
+            "type": "message", "role": "user",
+            "content": [{"type": "input_text", "text": "<environment_context>stuff</environment_context>"}]}},
+        {"timestamp": "t", "type": "response_item", "payload": {
+            "type": "message", "role": "user",
+            "content": [{"type": "input_text", "text": "real question here"}]}},
+    ]
+    (day / "rollout-2026-08-02T15-02-00-cx-old.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in records) + "\n"
+    )
+    (entry,) = scan_codex(home)
+    assert entry.preview == "real question here"
+
+
+def test_claude_preview_skips_command_records_and_finds_last(tmp_path):
+    home = tmp_path / ".claude"
+    project = home / "projects" / "-Users-x-proj"
+    project.mkdir(parents=True)
+    records = [
+        {"type": "user", "cwd": "/Users/x/proj", "message": {
+            "role": "user", "content": "<command-name>/model</command-name>"}},
+        {"type": "user", "cwd": "/Users/x/proj", "message": {
+            "role": "user", "content": "Caveat: The messages below were generated..."}},
+        {"type": "user", "cwd": "/Users/x/proj", "message": {
+            "role": "user", "content": "help me fix the tests"}},
+        {"type": "assistant", "cwd": "/Users/x/proj", "message": {
+            "role": "assistant", "content": [{"type": "text", "text": "On it."}]}},
+        {"type": "user", "cwd": "/Users/x/proj", "message": {
+            "role": "user", "content": "[Request interrupted by user]"}},
+    ]
+    (project / "cccc-3333.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in records) + "\n"
+    )
+    entries = [e for e in scan_claude_code(home) if e.session_id == "cccc-3333"]
+    (entry,) = entries
+    assert entry.preview == "help me fix the tests"
+    assert entry.last_preview == "On it."
+    assert entry.last_role == "assistant"
+
+
+def test_tail_preview_on_large_file(tmp_path):
+    """last_preview must come from the end of a file bigger than the tail
+    window, without reading the whole file."""
+    home = tmp_path / ".hermes"
+    (home / "sessions").mkdir(parents=True)
+    records = [{"role": "session_meta", "model": "m", "platform": "hermes"}]
+    records += [{"role": "tool", "tool_call_id": "c", "content": "y" * 2000}] * 300
+    records += [{"role": "user", "content": "first words"}]
+    records += [{"role": "tool", "tool_call_id": "c", "content": "y" * 2000}] * 300
+    records += [{"role": "assistant", "content": "the closing words"}]
+    p = home / "sessions" / "20260102_big-1.jsonl"
+    p.write_text("\n".join(json.dumps(r) for r in records) + "\n")
+    assert p.stat().st_size > 256 * 1024
+    (entry,) = scan_hermes(home)
+    assert entry.last_preview == "the closing words"
+    assert entry.last_role == "assistant"

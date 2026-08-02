@@ -270,6 +270,37 @@ def cmd_register_codex(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_hermes(args: argparse.Namespace) -> int:
+    """Export a session out of Hermes's state.db into Hermes-shaped JSONL.
+
+    Newer Hermes builds keep sessions only in the database (no JSONL
+    exports), so this is the bridge from a db-only session into every
+    file-based convert/register flow. Strictly read-only on the store.
+    """
+    from .readers.hermes_db import HermesDbError, export_hermes_records
+
+    db_path = args.db or os.path.expanduser("~/.hermes/state.db")
+    out = Path(args.output or f"{args.session_id}.jsonl")
+    if out.exists() and not args.force:
+        print(
+            f"error: {out} already exists; pass --force to overwrite",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        records = export_hermes_records(db_path, args.session_id)
+    except HermesDbError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    dump_jsonl(records, out)
+    print(f"exported {len(records)} records -> {out}")
+    print(
+        f"convert with:  session-bridge convert --from hermes {out} --to <target>",
+        file=sys.stderr,
+    )
+    return 0
+
+
 def cmd_tui(args: argparse.Namespace) -> int:
     """Launch the interactive TUI (requires the optional 'textual' dependency)."""
     try:
@@ -418,6 +449,17 @@ def build_parser() -> argparse.ArgumentParser:
              "(requires: pip install 'agent-session-bridge[tui]')",
     )
     tui.set_defaults(func=cmd_tui)
+
+    exp = sub.add_parser(
+        "export-hermes",
+        help="export a session from Hermes's state.db to JSONL "
+             "(newer Hermes builds keep sessions only in the database)",
+    )
+    exp.add_argument("session_id", help="Hermes session id (sessions.id in state.db)")
+    exp.add_argument("--db", help="path to Hermes state.db (default: ~/.hermes/state.db)")
+    exp.add_argument("-o", "--output", help="output JSONL path (default: <session-id>.jsonl)")
+    exp.add_argument("--force", action="store_true", help="overwrite an existing output file")
+    exp.set_defaults(func=cmd_export_hermes)
 
     skill = sub.add_parser(
         "install-skill",

@@ -96,8 +96,15 @@ def _assistant_blocks(record: dict[str, Any]) -> tuple[ContentBlock, ...]:
 
 def read_hermes(path: str | Path) -> Session:
     path = Path(path)
-    records = load_records(path)
+    return session_from_hermes_records(load_records(path))
 
+
+def session_from_hermes_records(records: list[dict[str, Any]]) -> Session:
+    """Build a Session from Hermes-shaped records, whatever their source.
+
+    Shared by the JSONL file reader and the state.db reader: the database
+    rows are exported into exactly these record shapes first.
+    """
     meta = SessionMeta(source_harness="hermes")
     tools: tuple[ToolSchema, ...] = ()
     messages: list[Message] = []

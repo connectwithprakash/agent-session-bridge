@@ -21,6 +21,12 @@ class SessionBridgeApp(App):
     CSS = """
     #picker-status { padding: 0 1; color: $text-muted; }
     #sessions { height: 1fr; }
+    #picker-detail {
+        height: auto;
+        max-height: 8;
+        padding: 0 1;
+        border-top: solid $primary 30%;
+    }
     VerticalScroll { padding: 1 2; }
     .switch-row { height: auto; align-vertical: middle; }
     .switch-row Label { padding: 1 0 0 1; }

@@ -60,6 +60,7 @@ class PickerScreen(Screen):
 
     BINDINGS = [
         ("r", "rescan", "Rescan"),
+        ("p", "toggle_detail", "Detail pane"),
         ("q", "quit", "Quit"),
     ]
 
@@ -72,6 +73,7 @@ class PickerScreen(Screen):
         yield Header()
         yield Static("scanning session stores…", id="picker-status")
         yield DataTable(id="sessions")
+        yield Static("", id="picker-detail")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -116,8 +118,34 @@ class PickerScreen(Screen):
         self.query_one("#picker-status", Static).update("rescanning…")
         self._load()
 
+    def action_toggle_detail(self) -> None:
+        pane = self.query_one("#picker-detail", Static)
+        pane.display = not pane.display
+
     def action_quit(self) -> None:
         self.app.exit()
+
+    def _show_detail(self, entry: SessionEntry | None) -> None:
+        """First/last messages of the highlighted row, wrapped across lines."""
+        pane = self.query_one("#picker-detail", Static)
+        if entry is None:
+            pane.update("")
+            return
+        lines = []
+        if entry.preview:
+            lines.append(f"[b]first[/] [dim](user)[/]      {escape(entry.preview)}")
+        if entry.last_preview:
+            role = entry.last_role or "?"
+            pad = " " * max(1, 10 - len(role))
+            lines.append(
+                f"[b]last[/]  [dim]({escape(role)})[/]{pad}{escape(entry.last_preview)}"
+            )
+        pane.update(
+            "\n".join(lines) if lines else "[dim]no conversational messages found[/]"
+        )
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        self._show_detail(self._by_key.get(event.row_key.value or ""))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         # Resolve by row key, not cursor index: a rescan can repopulate the
@@ -153,6 +181,11 @@ class SummaryScreen(Screen):
     @work(thread=True, exclusive=True)
     def _parse(self) -> None:
         try:
+            from .actions import materialize
+
+            # db-backed Hermes entries get a real transcript file here, so
+            # every downstream flow (convert/register/CLI display) is uniform.
+            self.entry = materialize(self.entry)
             session = read_session(self.entry.harness, self.entry.path)
         except Exception as exc:  # any parse failure -> panel, never a crash
             self.app.call_from_thread(self._show_error, exc)

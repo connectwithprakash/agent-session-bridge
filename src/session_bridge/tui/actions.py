@@ -15,14 +15,36 @@ Split in two so the TUI can preview before committing:
 from __future__ import annotations
 
 import shlex
+import tempfile
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .._ids import UnsafeSessionIdError
 from ..convert import ConversionResult, convert, dump_jsonl, now_codex_timestamp
 from ..place import SessionExistsError, UnsafeCwdError, place_claude_code
+from .discovery import SessionEntry
 from .options import ConvertOptions, resolve_output
+
+
+def materialize(entry: SessionEntry) -> SessionEntry:
+    """Give a db-backed Hermes entry a real JSONL file to feed file flows.
+
+    Hermes sessions discovered from state.db have no transcript file; this
+    exports the rows (read-only on the store) into a per-session temp cache
+    and returns an equivalent file-backed entry. File-backed entries pass
+    through untouched.
+    """
+    if not entry.db_backed:
+        return entry
+    from ..readers.hermes_db import export_hermes_records
+
+    records = export_hermes_records(entry.path, entry.session_id or "")
+    cache = Path(tempfile.gettempdir()) / "session-bridge-exports"
+    cache.mkdir(parents=True, exist_ok=True)
+    out = cache / f"{entry.session_id}.jsonl"
+    dump_jsonl(records, out)
+    return replace(entry, path=out, db_backed=False)
 
 
 def run_conversion(opts: ConvertOptions) -> ConversionResult:

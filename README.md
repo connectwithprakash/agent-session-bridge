@@ -29,8 +29,8 @@ and fail closed (no write) when it doesn't match.
 | Harness | Last verified against | Verification |
 |---|---|---|
 | Claude Code | 2.1.212 | Live `claude --resume` recall of user AND assistant sentinels, from claude, codex, and hermes sources |
-| Codex | Codex CLI 0.145.0 (`state_5.sqlite`) | Live `codex resume` recall of both-role sentinels from claude and hermes sources, and registered sessions listed in the resume picker |
-| Hermes | `state.db` schema as of 2026-07-28 | Live `hermes --resume` replay with both-role recall, from claude and codex sources |
+| Codex | Codex CLI 0.146.0 (`state_5.sqlite`) | Live `codex resume` recall of both-role sentinels from claude and hermes sources, and registered sessions listed in the resume picker |
+| Hermes | `state.db` schema as of 2026-08-02 (sessions are db-only; JSONL exports no longer written) | Live `hermes --resume` replay with both-role recall, from claude and codex sources; db-only sessions read via `export-hermes`/TUI |
 | Python | 3.11 – 3.13 | CI test matrix |
 
 All six directed conversion pairs were live-verified on real installs on
@@ -117,6 +117,14 @@ Install it machine-wide into every harness found on the box:
 ```bash
 session-bridge install-skill        # symlinks into ~/.claude, ~/.codex, ~/.hermes skills dirs
 session-bridge install-skill --copy # copies instead (survives uninstall, goes stale on upgrade)
+```
+
+Newer Hermes builds keep sessions only in `state.db` (no JSONL exports). The
+TUI reads them from the database directly; for the CLI, export first:
+
+```bash
+session-bridge export-hermes <session-id> -o session.jsonl
+session-bridge convert --from hermes session.jsonl --to claude-code ...
 ```
 
 Inspect a session's structure:

@@ -56,6 +56,10 @@ The registrars fail closed by design. On refusal:
   then run the acceptance test above before trusting it.
 - Hermes: same drill via `writers/hermes_db.py:_require_schema` against
   `~/.hermes/state.db` (`sessions`, `messages`).
+- Hermes sessions may be db-only: newer builds write NO JSONL exports, so
+  file-based checks silently test stale April-era exports. Source db-only
+  sessions via `session-bridge export-hermes` (or the TUI, which reads
+  state.db directly) and verify discovery lists them.
 - Claude Code has no index; drift shows up as reader misparses instead. Compare
   a fresh transcript's record types against `readers/claude_code.py`'s handled
   set (unknown types must degrade to RAW blocks, never crash).
