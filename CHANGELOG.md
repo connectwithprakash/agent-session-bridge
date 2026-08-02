@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.2.4...v0.3.0) (2026-08-02)
+
+
+### Features
+
+* **tui:** read db-only Hermes sessions; human previews; picker detail pane ([5b22f67](https://github.com/connectwithprakash/agent-session-bridge/commit/5b22f67463a2fbe947a7ace465123f64bec57473))
+
+
+### Documentation
+
+* hermes verification requires the interactive TUI, not -z oneshot ([04a5d00](https://github.com/connectwithprakash/agent-session-bridge/commit/04a5d0089cf778d9df3789919bd5e069a148da6b))
+
 ## [0.2.4](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.2.3...v0.2.4) (2026-07-28)
 
 
