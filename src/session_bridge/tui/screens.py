@@ -14,10 +14,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-# Session content (ids, cwds, previews, error text) is untrusted and must never
-# reach a markup-parsing sink unescaped: "[red]" in a transcript would otherwise
-# raise MarkupError and take down the whole app.
-from rich.markup import escape
+import re
+
 from textual import work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -40,6 +38,19 @@ from .actions import execute_writes, run_conversion
 from .discovery import SessionEntry, discover_sessions
 from .options import ConvertOptions, build_cli_command, resolve_output, validate_options
 from .summary import summarize_session
+
+
+def escape(text: str) -> str:
+    """Make untrusted text safe for textual markup by escaping EVERY ``[``.
+
+    Neither rich's nor textual's own ``escape`` is sufficient here: both only
+    escape bracket runs that look like closable tags, and textual's parser
+    still rejects sequences like an unclosed ``[IMPORTANT: ...`` — which real
+    cron-session previews contain, and which crashed the picker. Escaping
+    every bracket (doubling any preceding backslash run so a literal
+    backslash can't eat the escape) renders all content literally.
+    """
+    return re.sub(r"(\\*)\[", lambda m: m.group(1) * 2 + r"\[", text)
 
 
 def _human_size(n: int) -> str:

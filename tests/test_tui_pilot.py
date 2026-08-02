@@ -75,14 +75,19 @@ def _make_stores(tmp_path: Path) -> tuple[Path, Path, Path]:
     # picker's row keying (DuplicateKey) when keys were path-based.
     conn = sqlite3.connect(hermes_home / "state.db")
     conn.executescript(_SESSIONS_DDL + _MESSAGES_DDL)
-    for sid in ("20260801_000001_dbaaa1", "20260801_000002_dbaaa2"):
+    for sid, content in (
+        ("20260801_000001_dbaaa1", "db hello"),
+        # Markup-hostile content real cron sessions carry: rich.escape leaves
+        # "[IMPORTANT:" alone and textual's parser then rejects it.
+        ("20260801_000002_dbaaa2", "[IMPORTANT: cron job [/] do not [b]break"),
+    ):
         conn.execute(
             "INSERT INTO sessions (id, source, model, started_at) VALUES (?, 'cli', 'm', 50.0)",
             (sid,),
         )
         conn.execute(
-            "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, 'user', 'db hello', 51.0)",
-            (sid,),
+            "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, 'user', ?, 51.0)",
+            (sid, content),
         )
     conn.commit()
     conn.close()
@@ -160,6 +165,14 @@ def test_convert_flow_end_to_end(tmp_path):
 
             await pilot.press("n")
             await pilot.pause(0.2)
+            assert isinstance(app.screen, PickerScreen)
+            # Cursor through every row: the detail pane must survive
+            # markup-hostile previews and duplicate-path db sessions.
+            table = app.screen.query_one(DataTable)
+            table.focus()
+            for _ in range(table.row_count):
+                await pilot.press("down")
+            await pilot.pause(0.3)
             assert isinstance(app.screen, PickerScreen)
 
     asyncio.run(drive())
