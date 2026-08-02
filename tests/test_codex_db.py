@@ -65,7 +65,11 @@ def _sample_session():
     )
 
 
-def test_registers_thread_and_indexed_rollout(tmp_path):
+def test_registers_thread_and_indexed_rollout(tmp_path, monkeypatch):
+    # Deterministic cli_version: never call the real installed codex binary.
+    monkeypatch.setattr(
+        "session_bridge.writers.codex_db.infer_codex_cli_version", lambda home: "9.9.9"
+    )
     home = tmp_path / "codex"
     _make_codex_home(home)
     session_id = str(uuid.uuid4())
@@ -82,7 +86,7 @@ def test_registers_thread_and_indexed_rollout(tmp_path):
     assert rollout.is_file()
     assert session_id in rollout.name
     header = json.loads(rollout.read_text(encoding="utf-8").splitlines()[0])
-    assert header["payload"]["cli_version"] == "0.145.0"
+    assert header["payload"]["cli_version"] == "9.9.9"
     parsed = read_codex(rollout)
     assert parsed.meta.session_id == session_id
     assert parsed.meta.cwd == str(tmp_path.resolve())
