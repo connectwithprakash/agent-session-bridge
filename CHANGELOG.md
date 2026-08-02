@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.3.1...v0.3.2) (2026-08-02)
+
+
+### Bug Fixes
+
+* **tui:** escape every bracket for textual markup ([6d75011](https://github.com/connectwithprakash/agent-session-bridge/commit/6d75011ada1cbd7b727506927394e9ff96d8eace))
+
 ## [0.3.1](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.3.0...v0.3.1) (2026-08-02)
 
 
