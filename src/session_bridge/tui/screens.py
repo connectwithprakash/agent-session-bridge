@@ -55,6 +55,12 @@ def _one_line(text: str, limit: int = 80) -> str:
     return flat if len(flat) <= limit else flat[: limit - 1] + "…"
 
 
+def _entry_key(e: SessionEntry) -> str:
+    # Row keys must be unique per entry: db-backed Hermes sessions all share
+    # the same path (state.db), so the path alone collides.
+    return f"{e.path}::{e.session_id}"
+
+
 class PickerScreen(Screen):
     """Discovered sessions across all three harness stores, newest first."""
 
@@ -94,7 +100,7 @@ class PickerScreen(Screen):
 
     def _populate(self, entries: list[SessionEntry]) -> None:
         self.entries = entries
-        self._by_key = {str(e.path): e for e in entries}
+        self._by_key = {_entry_key(e): e for e in entries}
         status = self.query_one("#picker-status", Static)
         table = self.query_one(DataTable)
         table.clear()
@@ -106,7 +112,7 @@ class PickerScreen(Screen):
                 datetime.fromtimestamp(e.mtime).strftime("%Y-%m-%d %H:%M"),
                 _human_size(e.size),
                 escape(_one_line(e.preview or "")),
-                key=str(e.path),
+                key=_entry_key(e),
             )
         status.update(
             f"{len(entries)} session(s) found — enter to select, r to rescan, q to quit"

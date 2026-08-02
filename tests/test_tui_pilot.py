@@ -71,6 +71,21 @@ def _make_stores(tmp_path: Path) -> tuple[Path, Path, Path]:
         FIXTURES / "hermes_sample.jsonl",
         hermes_home / "sessions" / "20260417_hx-1.jsonl",
     )
+    # TWO db-only sessions: they share the state.db path, which crashed the
+    # picker's row keying (DuplicateKey) when keys were path-based.
+    conn = sqlite3.connect(hermes_home / "state.db")
+    conn.executescript(_SESSIONS_DDL + _MESSAGES_DDL)
+    for sid in ("20260801_000001_dbaaa1", "20260801_000002_dbaaa2"):
+        conn.execute(
+            "INSERT INTO sessions (id, source, model, started_at) VALUES (?, 'cli', 'm', 50.0)",
+            (sid,),
+        )
+        conn.execute(
+            "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, 'user', 'db hello', 51.0)",
+            (sid,),
+        )
+    conn.commit()
+    conn.close()
     codex_home = tmp_path / ".codex"  # intentionally absent -> scans to []
     return claude_home, codex_home, hermes_home
 
@@ -92,7 +107,7 @@ def test_convert_flow_end_to_end(tmp_path):
             await pilot.pause(0.5)
             assert isinstance(app.screen, PickerScreen)
             table = app.screen.query_one(DataTable)
-            assert table.row_count == 2
+            assert table.row_count == 4  # 1 file claude + 1 file hermes + 2 db hermes
 
             table.focus()
             await pilot.press("enter")
@@ -152,11 +167,8 @@ def test_convert_flow_end_to_end(tmp_path):
 
 def test_register_flow_hermes_end_to_end(tmp_path):
     app = _app(tmp_path)
+    # _make_stores already created state.db with two db-only sessions.
     hermes_db = tmp_path / ".hermes" / "state.db"
-    conn = sqlite3.connect(hermes_db)
-    conn.executescript(_SESSIONS_DDL + _MESSAGES_DDL)
-    conn.commit()
-    conn.close()
 
     async def drive() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
@@ -184,7 +196,7 @@ def test_register_flow_hermes_end_to_end(tmp_path):
             n = sqlite3.connect(hermes_db).execute(
                 "SELECT COUNT(*) FROM sessions"
             ).fetchone()[0]
-            assert n == 0, "plan phase mutated the store"
+            assert n == 2, "plan phase mutated the store (2 pre-seeded db sessions)"
 
             app.screen.query_one("#register", Button).press()
             await pilot.pause(0.7)
@@ -192,10 +204,13 @@ def test_register_flow_hermes_end_to_end(tmp_path):
             outcome = app.screen.outcome
             assert outcome.error is None
             assert outcome.backup_path is not None
-            rows = sqlite3.connect(hermes_db).execute(
-                "SELECT id FROM sessions"
-            ).fetchall()
-            assert len(rows) == 1
-            assert rows[0][0] == outcome.session_id
+            rows = {
+                r[0]
+                for r in sqlite3.connect(hermes_db)
+                .execute("SELECT id FROM sessions")
+                .fetchall()
+            }
+            assert len(rows) == 3  # 2 pre-seeded db sessions + the registration
+            assert outcome.session_id in rows
 
     asyncio.run(drive())
