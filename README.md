@@ -266,5 +266,14 @@ only in that transcript.
 python3 -m pytest        # IR, three readers, writers/round-trips, handshake, placement, and both SQLite registrars
 ```
 
+Before releases (or after a harness updates), run the live acceptance matrix
+against the real installed harnesses — it seeds sentinel sessions, bridges
+every pair, live-resumes each one, and cleans up after itself:
+
+```bash
+uv run --extra dev --extra tui python scripts/live_acceptance.py                    # full matrix
+uv run --extra dev --extra tui python scripts/live_acceptance.py --structure-only  # no LLM calls
+```
+
 Real captured sessions may contain secrets; `fixtures/real/` is gitignored and
 tests run only against synthetic, faithful fixtures.

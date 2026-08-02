@@ -10,6 +10,23 @@ This is the procedure that keeps the README's supported-versions matrix honest
 after any of them updates. Run it per affected harness; it needs a real
 install of that harness.
 
+## Automated: scripts/live_acceptance.py
+
+The procedure below is automated end to end by the acceptance runner —
+prefer it, and fall back to manual steps only when debugging a failure:
+
+    uv run --extra dev --extra tui python scripts/live_acceptance.py
+    # cheap pre-release check (no LLM calls):
+    ... --structure-only
+    # one harness updated:
+    ... --pairs claude:codex,hermes:codex --hermes-model <routable-model>
+
+It seeds dual-sentinel sessions in each source harness, bridges every
+requested pair, live-resumes in the target requiring BOTH sentinels quoted,
+checks codex picker requirements structurally, sweeps the real picker with
+the cursor (catches rendering crashes on real data), and cleans up every
+artifact it created. Do not mutate the harness stores while it runs.
+
 ## The live-recall acceptance test
 
 The core check is always the same shape: prove the target harness actually
