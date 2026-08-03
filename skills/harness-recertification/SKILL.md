@@ -27,6 +27,20 @@ checks codex picker requirements structurally, sweeps the real picker with
 the cursor (catches rendering crashes on real data), and cleans up every
 artifact it created. Do not mutate the harness stores while it runs.
 
+## Scheduled: catch harness updates before they bite
+
+Harnesses auto-update between recertifications, and format breaks surface as
+user-facing bugs unless something is watching. `scripts/install_weekly_check.sh`
+installs a launchd job (macOS) that runs the structure-only matrix every
+Monday 09:30, logs to `~/Library/Logs/session-bridge/structure-check.log`,
+and posts a notification on failure:
+
+    bash scripts/install_weekly_check.sh
+    # run immediately: launchctl kickstart -k gui/$(id -u)/com.session-bridge.structure-check
+
+When the notification fires, run the full runner manually and treat the
+failing pair as the start of the manual procedure below.
+
 ## The live-recall acceptance test
 
 The core check is always the same shape: prove the target harness actually

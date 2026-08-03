@@ -275,5 +275,12 @@ uv run --extra dev --extra tui python scripts/live_acceptance.py                
 uv run --extra dev --extra tui python scripts/live_acceptance.py --structure-only  # no LLM calls
 ```
 
+Harnesses auto-update, so a weekly scheduled structure check catches a
+format break before it surfaces as a bug. On macOS:
+
+```bash
+bash scripts/install_weekly_check.sh   # launchd job, Mondays 09:30, notifies on failure
+```
+
 Real captured sessions may contain secrets; `fixtures/real/` is gitignored and
 tests run only against synthetic, faithful fixtures.
