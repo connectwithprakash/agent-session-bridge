@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.3.2...v0.4.0) (2026-08-03)
+
+
+### Features
+
+* **tui:** live-session awareness and register-flow clarity ([2ddddeb](https://github.com/connectwithprakash/agent-session-bridge/commit/2ddddeb0707953e28adcdfb99cf89cca5243b5e0))
+
 ## [0.3.2](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.3.1...v0.3.2) (2026-08-02)
 
 
