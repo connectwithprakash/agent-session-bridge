@@ -68,6 +68,17 @@ regenerate the resource stanzas manually per the Homebrew section below.
   also reads its own merged `chore(main): release X.Y.Z` commits in history,
   so deleting a release/tag does not roll the version back. Accept the bump;
   do not fight it by hand-editing versions.
+- **Scripted merges race release-please:** after pushing a release-triggering
+  commit, the release PR only appears once that push's release workflow run
+  completes (~1 min). A script that runs `gh pr list` immediately finds
+  nothing, silently skips the merge, and downstream chain checks print empty
+  conclusions — which reads like a failed release but means the script ran
+  too early. Poll until the `chore(main): release X.Y.Z` PR exists before
+  merging.
+- **`brew upgrade` says already up to date after the tap bumped:** brew reads
+  the local tapped clone, which does not auto-pull. Run `brew update` (or
+  `git -C "$(brew --repository connectwithprakash/tap)" pull`) first, then
+  upgrade.
 
 ## Homebrew formula (connectwithprakash/homebrew-tap)
 
