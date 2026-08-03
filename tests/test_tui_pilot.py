@@ -28,6 +28,7 @@ from session_bridge.tui.screens import (  # noqa: E402
     RegisterResultScreen,
     ResultScreen,
     SummaryScreen,
+    TranscriptScreen,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -287,3 +288,93 @@ def test_summary_shows_store_session_id_for_hermes(tmp_path):
             assert "20260417_hx-1 (from store)" in body
 
     asyncio.run(drive())
+
+
+def test_transcript_viewer_from_summary(tmp_path):
+    """`v` on the summary opens the full conversation: both roles, reasoning,
+    tool calls, and tool results are all rendered."""
+    app = _app(tmp_path)
+
+    async def drive() -> None:
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            table = app.screen.query_one(DataTable)
+            table.focus()
+            await pilot.press("enter")  # row 0: the claude session
+            await pilot.pause(0.6)
+            assert isinstance(app.screen, SummaryScreen)
+            await pilot.press("v")
+            await pilot.pause(0.2)
+            assert isinstance(app.screen, TranscriptScreen)
+            body = str(app.screen.query_one("#transcript-body", Static).render())
+            assert "search for TODO comments" in body
+            assert "thinking · I'll grep for TODO." in body
+            assert "→ Grep" in body
+            assert "found 3 TODOs" in body
+            await pilot.press("escape")
+            assert isinstance(app.screen, SummaryScreen)
+
+    asyncio.run(drive())
+
+
+def test_transcript_viewer_survives_markup_hostile_db_session(tmp_path):
+    """The viewer renders db-backed sessions whose content is textual-markup
+    poison (the class of input that crashed the picker before escape())."""
+    app = _app(tmp_path)
+
+    async def drive() -> None:
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            picker = app.screen
+            table = picker.query_one(DataTable)
+            table.focus()
+            idx = next(
+                i
+                for i, e in enumerate(picker.entries)
+                if e.session_id == "20260801_000002_dbaaa2"
+            )
+            for _ in range(idx):
+                await pilot.press("down")
+            await pilot.press("enter")
+            await pilot.pause(0.6)
+            assert isinstance(app.screen, SummaryScreen)
+            await pilot.press("v")
+            await pilot.pause(0.2)
+            assert isinstance(app.screen, TranscriptScreen)
+            body = str(app.screen.query_one("#transcript-body", Static).render())
+            assert "IMPORTANT: cron job" in body
+
+    asyncio.run(drive())
+
+
+def test_transcript_markup_truncates_huge_tool_results():
+    """Prose is never cut; tool results beyond the preview cap disclose how
+    much was held back instead of flooding the view."""
+    from session_bridge.ir import (
+        ContentBlock,
+        Message,
+        Role,
+        Session,
+        SessionMeta,
+    )
+    from session_bridge.tui.screens import _transcript_markup
+
+    session = Session(
+        meta=SessionMeta(source_harness="claude-code"),
+        messages=(
+            Message(
+                role=Role.ASSISTANT,
+                content=(ContentBlock.tool_call("c1", "Bash", {"command": "cat big"}),),
+                timestamp="2026-08-02T21:00:00.000Z",
+            ),
+            Message(
+                role=Role.TOOL,
+                content=(ContentBlock.tool_result("c1", "x" * 5000),),
+            ),
+        ),
+    )
+    markup = _transcript_markup(session)
+    assert "→ Bash" in markup
+    assert "2026-08-02 21:00:00" in markup
+    assert "(+3000 more chars)" in markup
+    assert "x" * 2001 not in markup

@@ -12,6 +12,7 @@ lives in the textual-free sibling modules (discovery/options/summary/actions).
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime
 
@@ -34,7 +35,7 @@ from textual.widgets import (
 )
 
 from ..convert import HARNESSES, ConversionResult, default_output_name, read_session
-from ..ir import Session
+from ..ir import BlockType, Role, Session
 from .actions import execute_writes, run_conversion
 from .discovery import SessionEntry, discover_sessions, is_active, last_activity
 from .options import ConvertOptions, build_cli_command, resolve_output, validate_options
@@ -201,6 +202,7 @@ class SummaryScreen(Screen):
     BINDINGS = [
         ("c", "convert", "Convert / place"),
         ("g", "register", "Register (codex/hermes)"),
+        ("v", "view_transcript", "View transcript"),
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -261,7 +263,7 @@ class SummaryScreen(Screen):
             body
             + "\n\n[dim]c  convert — incl. making it resumable in Claude Code "
             "(placement)\ng  register into a store — Codex / Hermes\n"
-            "esc  back[/]"
+            "v  view the full transcript\nesc  back[/]"
         )
 
     def action_convert(self) -> None:
@@ -271,6 +273,95 @@ class SummaryScreen(Screen):
     def action_register(self) -> None:
         if self.session is not None:
             self.app.push_screen(RegisterFormScreen(self.entry))
+
+    def action_view_transcript(self) -> None:
+        if self.session is not None:
+            self.app.push_screen(TranscriptScreen(self.entry, self.session))
+
+
+_ROLE_MARKUP = {
+    Role.USER: "[b cyan]user[/]",
+    Role.ASSISTANT: "[b green]assistant[/]",
+    Role.SYSTEM: "[b yellow]system[/]",
+    Role.TOOL: "[b magenta]tool[/]",
+}
+
+# Tool results can be hundreds of KB (file dumps, command output); the viewer
+# shows the head and says how much it held back. Prose is never truncated.
+_RESULT_PREVIEW_CHARS = 2000
+
+
+def _stamp(ts: str | None) -> str:
+    """ISO timestamp -> short display form; anything unparseable passes through."""
+    if not ts:
+        return ""
+    return ts[:19].replace("T", " ") if len(ts) >= 19 and ts[10:11] == "T" else ts
+
+
+def _transcript_markup(session: Session) -> str:
+    """The whole conversation as one markup string (module-level for tests)."""
+    parts: list[str] = []
+    for msg in session.messages:
+        role = _ROLE_MARKUP.get(msg.role, f"[b]{escape(msg.role.value)}[/]")
+        stamp = _stamp(msg.timestamp)
+        parts.append(f"{role}  [dim]{escape(stamp)}[/]" if stamp else role)
+        for b in msg.content:
+            if b.type is BlockType.TEXT:
+                if b.text:
+                    parts.append(escape(b.text))
+            elif b.type is BlockType.REASONING:
+                if b.text:
+                    parts.append(f"[dim italic]thinking · {escape(b.text)}[/]")
+            elif b.type is BlockType.TOOL_CALL:
+                args = json.dumps(b.tool_input or {}, ensure_ascii=False)
+                parts.append(
+                    f"[b]→ {escape(b.tool_name or '?')}[/] "
+                    f"[dim]{escape(_one_line(args, 160))}[/]"
+                )
+            elif b.type is BlockType.TOOL_RESULT:
+                head = "[b red]← error[/]" if b.is_error else "[b]← result[/]"
+                text = b.text or ""
+                if len(text) > _RESULT_PREVIEW_CHARS:
+                    held = len(text) - _RESULT_PREVIEW_CHARS
+                    parts.append(
+                        f"{head}\n{escape(text[:_RESULT_PREVIEW_CHARS])}"
+                        f"\n[dim]… (+{held} more chars)[/]"
+                    )
+                else:
+                    parts.append(f"{head}\n{escape(text)}" if text else head)
+            elif b.type is BlockType.RAW:
+                parts.append(f"[dim]{escape(b.text or '[unsupported block]')}[/]")
+        parts.append("")
+    return "\n".join(parts).rstrip() or "[dim]this session has no messages[/]"
+
+
+class TranscriptScreen(Screen):
+    """Every turn of the parsed session in order, scrollable, tool traffic included."""
+
+    BINDINGS = [("escape", "app.pop_screen", "Back")]
+
+    def __init__(self, entry: SessionEntry, session: Session) -> None:
+        super().__init__()
+        self.entry = entry
+        self.session = session
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Static("", id="transcript-status")
+        with VerticalScroll(id="transcript-scroll"):
+            yield Static("", id="transcript-body")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        n = len(self.session.messages)
+        self.query_one("#transcript-status", Static).update(
+            f"{escape(self.entry.path.name)} — {n} message(s) — "
+            "arrows/pgup/pgdn to scroll, esc to go back"
+        )
+        self.query_one("#transcript-body", Static).update(
+            _transcript_markup(self.session)
+        )
+        self.query_one("#transcript-scroll", VerticalScroll).focus()
 
 
 class OptionsScreen(Screen):

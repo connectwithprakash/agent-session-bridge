@@ -27,6 +27,8 @@ class SessionBridgeApp(App):
         padding: 0 1;
         border-top: solid $primary 30%;
     }
+    #transcript-status { padding: 0 1; color: $text-muted; }
+    #transcript-scroll { height: 1fr; }
     VerticalScroll { padding: 1 2; }
     .switch-row { height: auto; align-vertical: middle; }
     .switch-row Label { padding: 1 0 0 1; }
