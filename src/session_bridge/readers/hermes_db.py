@@ -63,7 +63,15 @@ def export_hermes_records(
         if row is None:
             raise HermesDbError(f"no session {session_id!r} in {db_path}")
         records: list[dict[str, Any]] = [
-            {"role": "session_meta", "model": row[0], "platform": "hermes"}
+            {
+                "role": "session_meta",
+                "model": row[0],
+                "platform": "hermes",
+                # Native transcripts never carry an id inside the records;
+                # the store knows it, so exports preserve it for inspect/
+                # summary fidelity.
+                "session_id": session_id,
+            }
         ]
         cursor = conn.execute(
             """

@@ -44,7 +44,11 @@ def materialize(entry: SessionEntry) -> SessionEntry:
     cache.mkdir(parents=True, exist_ok=True)
     out = cache / f"{entry.session_id}.jsonl"
     dump_jsonl(records, out)
-    return replace(entry, path=out, db_backed=False)
+    # Remember the real store so activity checks don't stat the snapshot.
+    return replace(
+        entry, path=out, db_backed=False,
+        origin_path=entry.path, origin_db_backed=True,
+    )
 
 
 def run_conversion(opts: ConvertOptions) -> ConversionResult:

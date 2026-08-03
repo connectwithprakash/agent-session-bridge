@@ -12,6 +12,7 @@ lives in the textual-free sibling modules (discovery/options/summary/actions).
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 
 import re
@@ -35,7 +36,7 @@ from textual.widgets import (
 from ..convert import HARNESSES, ConversionResult, default_output_name, read_session
 from ..ir import Session
 from .actions import execute_writes, run_conversion
-from .discovery import SessionEntry, discover_sessions
+from .discovery import SessionEntry, discover_sessions, is_active, last_activity
 from .options import ConvertOptions, build_cli_command, resolve_output, validate_options
 from .summary import summarize_session
 
@@ -64,6 +65,16 @@ def _human_size(n: int) -> str:
 def _one_line(text: str, limit: int = 80) -> str:
     flat = " ".join(text.split())
     return flat if len(flat) <= limit else flat[: limit - 1] + "…"
+
+
+def _age(seconds: float) -> str:
+    if seconds < 90:
+        return f"{max(0, int(seconds))}s ago"
+    if seconds < 5400:
+        return f"{int(seconds // 60)}m ago"
+    if seconds < 129600:
+        return f"{int(seconds // 3600)}h ago"
+    return f"{int(seconds // 86400)}d ago"
 
 
 def _entry_key(e: SessionEntry) -> str:
@@ -96,7 +107,7 @@ class PickerScreen(Screen):
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
         table.cursor_type = "row"
-        table.add_columns("harness", "session id", "cwd", "modified", "size", "preview")
+        table.add_columns("", "harness", "session id", "cwd", "modified", "size", "preview")
         self._load()
 
     @work(thread=True, exclusive=True)
@@ -115,8 +126,13 @@ class PickerScreen(Screen):
         status = self.query_one("#picker-status", Static)
         table = self.query_one(DataTable)
         table.clear()
+        now = time.time()
+        active = 0
         for e in entries:
+            live = (now - e.mtime) < 180
+            active += live
             table.add_row(
+                "[green]\u25cf[/]" if live else "",
                 e.harness,
                 escape(_one_line(e.session_id or "?", 40)),
                 escape(_one_line(e.cwd or "-", 40)),
@@ -125,8 +141,10 @@ class PickerScreen(Screen):
                 escape(_one_line(e.preview or "")),
                 key=_entry_key(e),
             )
+        live_note = f" · [green]\u25cf {active} active[/]" if active else ""
         status.update(
-            f"{len(entries)} session(s) found — enter to select, r to rescan, q to quit"
+            f"{len(entries)} session(s) found{live_note} — enter to select, "
+            "r to rescan, q to quit"
             if entries
             else "no sessions found in ~/.claude, ~/.codex, or ~/.hermes — r to rescan"
         )
@@ -149,6 +167,11 @@ class PickerScreen(Screen):
             pane.update("")
             return
         lines = []
+        ts = last_activity(entry)
+        if ts is not None:
+            age = _age(time.time() - ts)
+            flag = " [green]\u25cf active[/]" if is_active(entry) else ""
+            lines.append(f"[b]modified[/]         {age}{flag}")
         if entry.preview:
             lines.append(f"[b]first[/] [dim](user)[/]      {escape(entry.preview)}")
         if entry.last_preview:
@@ -176,8 +199,8 @@ class SummaryScreen(Screen):
     """Full parse of the chosen session (inspect-equivalent), kept for later screens."""
 
     BINDINGS = [
-        ("c", "convert", "Convert"),
-        ("g", "register", "Register"),
+        ("c", "convert", "Convert / place"),
+        ("g", "register", "Register (codex/hermes)"),
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -218,12 +241,27 @@ class SummaryScreen(Screen):
     def _render_summary(self, session: Session) -> None:
         self.session = session
         rows = summarize_session(session)
+        if self.entry.session_id:
+            rows = [
+                (label, f"{self.entry.session_id} (from store)")
+                if label == "session id" and value in ("None", "", "-")
+                else (label, value)
+                for label, value in rows
+            ]
         width = max(len(label) for label, _ in rows)
         body = "\n".join(
             f"[b]{label:<{width}}[/]  {escape(value)}" for label, value in rows
         )
+        if is_active(self.entry):
+            body = (
+                "[yellow]\u25cf this session appears ACTIVE — something is "
+                "still writing to it[/]\n\n" + body
+            )
         self.query_one("#summary-body", Static).update(
-            body + "\n\n[dim]c to configure a conversion, escape to go back[/]"
+            body
+            + "\n\n[dim]c  convert — incl. making it resumable in Claude Code "
+            "(placement)\ng  register into a store — Codex / Hermes\n"
+            "esc  back[/]"
         )
 
     def action_convert(self) -> None:
@@ -359,7 +397,7 @@ class OptionsScreen(Screen):
                 "[b red]" + "\n".join(errors) + "[/]"
             )
             return
-        self.app.push_screen(DryRunScreen(opts))
+        self.app.push_screen(DryRunScreen(opts, entry=self.entry))
 
 
 class DryRunScreen(Screen):
@@ -367,9 +405,10 @@ class DryRunScreen(Screen):
 
     BINDINGS = [("escape", "back", "Back")]
 
-    def __init__(self, opts: ConvertOptions) -> None:
+    def __init__(self, opts: ConvertOptions, entry: SessionEntry | None = None) -> None:
         super().__init__()
         self.opts = opts
+        self.entry = entry
         self.result: ConversionResult | None = None
         self._writing = False
 
@@ -424,6 +463,12 @@ class DryRunScreen(Screen):
             lines.extend(f"  [yellow]- {escape(w)}[/]" for w in result.report.warnings)
         else:
             lines.append("\n[green]lossless conversion (no warnings).[/]")
+        if self.entry is not None and is_active(self.entry):
+            lines.append(
+                "\n[yellow]\u25cf source session appears ACTIVE — this "
+                "conversion captures it only up to now. Hand off after the "
+                "source goes quiet, or convert again afterwards.[/]"
+            )
         lines.append("\n[b]equivalent CLI command:[/]")
         lines.append(f"  [dim]{escape(build_cli_command(opts))}[/]")
         self.query_one("#dryrun-body", Static).update("\n".join(lines))
@@ -526,12 +571,28 @@ class RegisterFormScreen(Screen):
 
     def compose(self) -> ComposeResult:
         app_codex_home = getattr(self.app, "codex_home", None)
+        # Registering a session back into its own store would just duplicate
+        # it, so the source harness is not offered as a target.
+        stores = [
+            (label, value)
+            for label, value in (
+                ("Hermes (state.db)", "hermes"),
+                ("Codex (state_5.sqlite)", "codex"),
+            )
+            if value != self.entry.harness
+        ]
         yield Header()
         with VerticalScroll():
+            yield Static(
+                "[dim]Registration writes into a harness's SQLite store. "
+                "Claude Code has no store — to make a session resumable "
+                "there, use Convert ([b]c[/]) with placement instead.[/]",
+                id="register-note",
+            )
             yield Label("Target store")
             yield Select(
-                [("Hermes (state.db)", "hermes"), ("Codex (state_5.sqlite)", "codex")],
-                value="hermes",
+                stores,
+                value=stores[0][1],
                 allow_blank=False,
                 id="store",
             )
@@ -564,7 +625,7 @@ class RegisterFormScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
-        self._sync_store("hermes")
+        self._sync_store(str(self.query_one("#store", Select).value))
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "store":
@@ -622,7 +683,7 @@ class RegisterFormScreen(Screen):
                 no_backup=no_backup,
                 stub_open_calls=stub,
             )
-        self.app.push_screen(RegisterPlanScreen(store, opts))
+        self.app.push_screen(RegisterPlanScreen(store, opts, entry=self.entry))
 
 
 class RegisterPlanScreen(Screen):
@@ -630,10 +691,11 @@ class RegisterPlanScreen(Screen):
 
     BINDINGS = [("escape", "back", "Back")]
 
-    def __init__(self, store: str, opts) -> None:
+    def __init__(self, store: str, opts, entry: SessionEntry | None = None) -> None:
         super().__init__()
         self.store = store
         self.opts = opts
+        self.entry = entry
         self.plan = None
         self._writing = False
 
@@ -699,6 +761,12 @@ class RegisterPlanScreen(Screen):
             lines.append("\n[green]lossless registration (no warnings).[/]")
         for note in plan.notes:
             lines.append(f"[dim]note: {escape(note)}[/]")
+        if self.entry is not None and is_active(self.entry):
+            lines.append(
+                "\n[yellow]\u25cf source session appears ACTIVE — the "
+                "registration captures it only up to now. Register again "
+                "after the source goes quiet if it keeps working.[/]"
+            )
         if plan.cli_command:
             lines.append("\n[b]equivalent CLI command:[/]")
             lines.append(f"  [dim]{escape(plan.cli_command)}[/]")

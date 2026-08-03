@@ -45,6 +45,10 @@ class SessionEntry:
     # JSONL exports; db-backed entries carry the db path and need an export
     # (tui.actions.materialize) before file-based flows can use them.
     db_backed: bool = False
+    # Set by materialize(): where the session REALLY lives, so activity
+    # checks look at the live store rather than the temp export snapshot.
+    origin_path: Path | None = None
+    origin_db_backed: bool = False
 
 
 # Real Claude Code transcripts open with a variable-length preamble of header
@@ -361,6 +365,46 @@ def scan_hermes(hermes_home: Path | None = None) -> list[SessionEntry]:
         except (OSError, json.JSONDecodeError, UnicodeDecodeError, KeyError, TypeError, ValueError):
             continue
     return entries
+
+
+# A session written to within this window is treated as live: an agent is
+# probably still appending, so a conversion would capture a moving target.
+ACTIVE_WINDOW_SECONDS = 180
+
+
+def last_activity(entry: SessionEntry) -> float | None:
+    """The source's freshest write timestamp, queried live (never raises).
+
+    Uses the origin store for materialized entries — the temp export's own
+    mtime is meaningless (it is always "just now").
+    """
+    import sqlite3
+
+    try:
+        if entry.db_backed or entry.origin_db_backed:
+            db = entry.origin_path if entry.origin_db_backed else entry.path
+            conn = sqlite3.connect(f"file:{Path(db).resolve()}?mode=ro", uri=True)
+            try:
+                row = conn.execute(
+                    "SELECT MAX(timestamp) FROM messages WHERE session_id = ?",
+                    (entry.session_id,),
+                ).fetchone()
+            finally:
+                conn.close()
+            return float(row[0]) if row and row[0] is not None else None
+        return Path(entry.origin_path or entry.path).stat().st_mtime
+    except Exception:
+        return None
+
+
+def is_active(entry: SessionEntry, *, now: float | None = None) -> bool:
+    """True when the session's source was written to within the window."""
+    import time
+
+    ts = last_activity(entry)
+    if ts is None:
+        return False
+    return ((now if now is not None else time.time()) - ts) < ACTIVE_WINDOW_SECONDS
 
 
 def discover_sessions(

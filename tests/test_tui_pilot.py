@@ -6,8 +6,10 @@ modules have their own textual-free tests). Async app driving happens through
 """
 
 import asyncio
+import os
 import shutil
 import sqlite3
+import time
 from pathlib import Path
 
 import pytest
@@ -91,6 +93,11 @@ def _make_stores(tmp_path: Path) -> tuple[Path, Path, Path]:
         )
     conn.commit()
     conn.close()
+    # The claude entry is the newest so it sits on row 0: the register flow
+    # test selects it and can still target the hermes store (the source
+    # harness is filtered out of register targets).
+    now = time.time()
+    os.utime(proj / "aaaa-1111.jsonl", (now + 5, now + 5))
     codex_home = tmp_path / ".codex"  # intentionally absent -> scans to []
     return claude_home, codex_home, hermes_home
 
@@ -128,10 +135,13 @@ def test_convert_flow_end_to_end(tmp_path):
             assert isinstance(app.screen, OptionsScreen)
             opts_screen = app.screen
             opts_screen.query_one("#output").value = str(out_dir / "converted.jsonl")
-            target = opts_screen.query_one("#target", Select).value
-            assert opts_screen.query_one("#place-group").display == (
-                target == "claude-code"
-            )
+            # Row 0 is a claude-code source, so the default target is codex
+            # and the placement group starts hidden.
+            assert opts_screen.query_one("#place-group").display is False
+            opts_screen.query_one("#target", Select).value = "claude-code"
+            await pilot.pause(0.2)
+            assert opts_screen.query_one("#place-group").display is True
+            opts_screen.query_one("#output").value = str(out_dir / "converted.jsonl")
 
             # Placement enabled with a blank cwd must be a form error.
             opts_screen.query_one("#place", Switch).value = True
@@ -196,6 +206,12 @@ def test_register_flow_hermes_end_to_end(tmp_path):
             await pilot.pause(0.2)
             assert isinstance(app.screen, RegisterFormScreen)
             assert str(app.screen.query_one("#store", Select).value) == "hermes"
+            # A claude-code source can target both stores; the note points
+            # Claude Code seekers at Convert-with-placement instead.
+            store_values = {v for _, v in app.screen.query_one("#store", Select)._options}
+            assert store_values == {"hermes", "codex"}
+            note = str(app.screen.query_one("#register-note", Static).render())
+            assert "Claude Code has no store" in note
             # hermes-db left blank -> resolves via the app's hermes_home override
             app.screen.query_one("#reg-continue", Button).press()
             await pilot.pause(0.5)
@@ -225,5 +241,49 @@ def test_register_flow_hermes_end_to_end(tmp_path):
             }
             assert len(rows) == 3  # 2 pre-seeded db sessions + the registration
             assert outcome.session_id in rows
+
+    asyncio.run(drive())
+
+
+def test_register_targets_exclude_source_harness(tmp_path):
+    """A hermes-source session must not offer hermes as a register target
+    (it would duplicate the session in its own store)."""
+    app = _app(tmp_path)
+
+    async def drive() -> None:
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            table = app.screen.query_one(DataTable)
+            table.focus()
+            await pilot.press("down")  # row 1: the hermes file session
+            await pilot.press("enter")
+            await pilot.pause(0.5)
+            assert isinstance(app.screen, SummaryScreen)
+            assert app.screen.entry.harness == "hermes"
+            await pilot.press("g")
+            await pilot.pause(0.3)
+            assert isinstance(app.screen, RegisterFormScreen)
+            store_values = {v for _, v in app.screen.query_one("#store", Select)._options}
+            assert store_values == {"codex"}
+
+    asyncio.run(drive())
+
+
+def test_summary_shows_store_session_id_for_hermes(tmp_path):
+    """Hermes transcripts carry no id in-band; the summary falls back to the
+    store's id instead of showing None."""
+    app = _app(tmp_path)
+
+    async def drive() -> None:
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.5)
+            table = app.screen.query_one(DataTable)
+            table.focus()
+            await pilot.press("down")
+            await pilot.press("enter")
+            await pilot.pause(0.6)
+            assert isinstance(app.screen, SummaryScreen)
+            body = str(app.screen.query_one("#summary-body", Static).render())
+            assert "20260417_hx-1 (from store)" in body
 
     asyncio.run(drive())
