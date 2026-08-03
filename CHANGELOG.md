@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.4.2...v0.5.0) (2026-08-03)
+
+
+### Features
+
+* **scripts:** scheduled weekly structure check against the real stores ([e32f12e](https://github.com/connectwithprakash/agent-session-bridge/commit/e32f12e36d99c10005a675698dd00711777d2e41))
+* **tui:** full-transcript viewer on the summary screen (v) ([6a907a0](https://github.com/connectwithprakash/agent-session-bridge/commit/6a907a060654983abc07f71b651fa66644a1fe47))
+
+
+### Documentation
+
+* **releasing:** scripted merges race release-please; brew reads the unpulled tap clone ([e979c0e](https://github.com/connectwithprakash/agent-session-bridge/commit/e979c0e837fb9c37271df24bf06f5da4098711a2))
+
 ## [0.4.2](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.4.1...v0.4.2) (2026-08-03)
 
 
