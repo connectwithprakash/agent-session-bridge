@@ -83,6 +83,13 @@ def _user_content(msg: Message) -> Any:
 
 def write_claude_code(session: Session) -> tuple[list[dict[str, Any]], ConversionReport]:
     report = report_losses(session, "claude-code")
+    model = session.meta.model or ""
+    if model and not model.lower().startswith("claude"):
+        report.warn(
+            f"source model {model!r} is not a Claude model id: Claude Code "
+            "will print a notice on resume and substitute its configured "
+            "default. Context is unaffected."
+        )
     if any(
         b.type is BlockType.REASONING and not (b.text or "").strip()
         for m in session.messages

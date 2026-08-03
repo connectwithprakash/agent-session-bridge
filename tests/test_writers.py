@@ -151,3 +151,22 @@ def test_claude_writer_drops_empty_reasoning_and_discloses():
     ]
     assert not thinking
     assert any("empty thinking" in w for w in report.warnings)
+
+
+def test_claude_writer_discloses_foreign_model_fallback():
+    from session_bridge.ir import ContentBlock, Message, Role, Session, SessionMeta
+    from session_bridge.writers.claude_code import write_claude_code
+
+    session = Session(
+        meta=SessionMeta(source_harness="hermes", session_id="s", model="gpt-5.6-luna"),
+        messages=(Message(role=Role.USER, content=(ContentBlock.text_block("hi"),)),),
+    )
+    _, report = write_claude_code(session)
+    assert any("not a Claude model id" in w for w in report.warnings)
+
+    native = Session(
+        meta=SessionMeta(source_harness="codex", session_id="s", model="claude-fable-5"),
+        messages=(Message(role=Role.USER, content=(ContentBlock.text_block("hi"),)),),
+    )
+    _, report2 = write_claude_code(native)
+    assert not any("not a Claude model id" in w for w in report2.warnings)
