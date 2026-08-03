@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.4.1...v0.4.2) (2026-08-03)
+
+
+### Bug Fixes
+
+* **claude-code:** disclose the foreign-model fallback on resume ([344e94a](https://github.com/connectwithprakash/agent-session-bridge/commit/344e94ac8b3d7ee255ae629551090b95de2c4c31))
+
 ## [0.4.1](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.4.0...v0.4.1) (2026-08-03)
 
 
