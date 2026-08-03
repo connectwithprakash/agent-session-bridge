@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-session-bridge"
-version = "0.4.0"
+version = "0.4.1"
 description = "Local-first cross-harness agent-session portability: export a live coding-agent session from one harness and resume it in another."
 readme = "README.md"
 requires-python = ">=3.11"
