@@ -233,8 +233,9 @@ def register_codex_session(
     """Create a Codex rollout and its ``threads`` index row.
 
     ``session_id`` must be a safe UUID-shaped id accepted by ``codex resume``.
-    ``cwd`` is required because Hermes transcripts do not retain a working
-    directory and Codex uses it to filter the resume picker. The function writes
+    ``cwd`` is required because Codex uses it to filter the resume picker
+    and not every source retains one (Hermes JSONL transcripts don't; its
+    state.db does). The function writes
     the rollout atomically, then inserts the index row in one SQLite transaction;
     if indexing fails, the newly-created rollout is removed.
 

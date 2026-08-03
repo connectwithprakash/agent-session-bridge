@@ -50,7 +50,8 @@ def _make_db(path: Path, session_id: str = "20260802_150838_12522c") -> Path:
     conn = sqlite3.connect(path)
     conn.executescript(_SESSIONS_DDL + _MESSAGES_DDL)
     conn.execute(
-        "INSERT INTO sessions (id, source, model, started_at) VALUES (?, 'cli', 'gpt-5.6-terra', 100.0)",
+        "INSERT INTO sessions (id, source, model, started_at, cwd) "
+        "VALUES (?, 'cli', 'gpt-5.6-terra', 100.0, '/Users/x/proj')",
         (session_id,),
     )
     rows = [
@@ -81,6 +82,8 @@ def test_read_hermes_db_builds_full_session(tmp_path):
     db = _make_db(tmp_path / "state.db")
     session = read_hermes_db(db, "20260802_150838_12522c")
     assert session.meta.model == "gpt-5.6-terra"
+    assert session.meta.session_id == "20260802_150838_12522c"
+    assert session.meta.cwd == "/Users/x/proj"
     roles = [m.role for m in session.messages]
     assert roles == [Role.USER, Role.ASSISTANT, Role.TOOL, Role.ASSISTANT]
     kinds = [b.type for b in session.messages[1].content]
@@ -124,6 +127,7 @@ def test_discovery_lists_db_only_sessions(tmp_path):
     assert entry.db_backed is True
     assert entry.session_id == "20260802_150838_12522c"
     assert entry.preview == "convert me please"
+    assert entry.cwd == "/Users/x/proj"
     assert entry.last_preview == "done, here you go"
     assert entry.last_role == "assistant"
     assert entry.mtime == 104.0

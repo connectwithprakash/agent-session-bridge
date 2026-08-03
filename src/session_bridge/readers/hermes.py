@@ -115,6 +115,7 @@ def session_from_hermes_records(records: list[dict[str, Any]]) -> Session:
             meta = SessionMeta(
                 source_harness="hermes",
                 session_id=rec.get("session_id"),
+                cwd=rec.get("cwd"),
                 model=rec.get("model"),
                 version=rec.get("platform"),
                 extra={"platform": rec.get("platform")},

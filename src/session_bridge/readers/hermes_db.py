@@ -58,7 +58,7 @@ def export_hermes_records(
     conn = _connect_ro(db_path)
     try:
         row = conn.execute(
-            "SELECT model FROM sessions WHERE id = ?", (session_id,)
+            "SELECT model, cwd FROM sessions WHERE id = ?", (session_id,)
         ).fetchone()
         if row is None:
             raise HermesDbError(f"no session {session_id!r} in {db_path}")
@@ -67,10 +67,12 @@ def export_hermes_records(
                 "role": "session_meta",
                 "model": row[0],
                 "platform": "hermes",
-                # Native transcripts never carry an id inside the records;
-                # the store knows it, so exports preserve it for inspect/
-                # summary fidelity.
+                # Native transcripts never carry these inside the records;
+                # the store knows them, so exports preserve them (id for
+                # inspect/summary fidelity, cwd for placement/registration
+                # prefill in the targets).
                 "session_id": session_id,
+                "cwd": row[1] or None,
             }
         ]
         cursor = conn.execute(
@@ -117,6 +119,7 @@ class HermesDbSessionInfo:
     first_user: Optional[str]
     last_text: Optional[str]
     last_role: Optional[str]
+    cwd: Optional[str] = None
 
 
 def list_hermes_db_sessions(db_path: str | Path) -> list[HermesDbSessionInfo]:
@@ -124,8 +127,8 @@ def list_hermes_db_sessions(db_path: str | Path) -> list[HermesDbSessionInfo]:
     conn = _connect_ro(db_path)
     try:
         infos: list[HermesDbSessionInfo] = []
-        for sid, started_at in conn.execute(
-            "SELECT id, started_at FROM sessions ORDER BY started_at DESC"
+        for sid, started_at, cwd in conn.execute(
+            "SELECT id, started_at, cwd FROM sessions ORDER BY started_at DESC"
         ):
             last = conn.execute(
                 "SELECT MAX(timestamp), COALESCE(SUM(LENGTH(COALESCE(content,''))),0) "
@@ -154,6 +157,7 @@ def list_hermes_db_sessions(db_path: str | Path) -> list[HermesDbSessionInfo]:
                     first_user=first_user[0] if first_user else None,
                     last_text=last_msg[0] if last_msg else None,
                     last_role=last_msg[1] if last_msg else None,
+                    cwd=cwd or None,
                 )
             )
         return infos
