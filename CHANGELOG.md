@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.4.0...v0.4.1) (2026-08-03)
+
+
+### Bug Fixes
+
+* **tui:** surface Hermes sessions' working directory from state.db ([a8ca090](https://github.com/connectwithprakash/agent-session-bridge/commit/a8ca09015cd779aedc05ff327e31eb77e7bb9341))
+
 ## [0.4.0](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.3.2...v0.4.0) (2026-08-03)
 
 
