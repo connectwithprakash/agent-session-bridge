@@ -8,3 +8,8 @@ dist/
 venv/
 # Never commit real captured sessions (may contain secrets/personal data)
 fixtures/real/
+
+# converted-session outputs (session-bridge convert writes <stem>.<target>.jsonl into cwd)
+*.claude-code.jsonl
+*.codex.jsonl
+*.hermes.jsonl
