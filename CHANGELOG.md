@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.5.0...v0.5.1) (2026-08-04)
+
+
+### Documentation
+
+* credit the harnesses this was built with ([0e23f6c](https://github.com/connectwithprakash/agent-session-bridge/commit/0e23f6c94306d11867a5b8913c62c6fceebbaa02))
+* demo now shows the payoff — codex resume continuing the imported session live ([86fc040](https://github.com/connectwithprakash/agent-session-bridge/commit/86fc040675c141b105f4c958dcd776e0fb7e83ab))
+* re-record the TUI demo on v0.5.0 (transcript viewer, active marker, codex register) ([e3ef8ee](https://github.com/connectwithprakash/agent-session-bridge/commit/e3ef8ee492e60d99ac1943a5ca6b0bea45d58717))
+
 ## [0.5.0](https://github.com/connectwithprakash/agent-session-bridge/compare/v0.4.2...v0.5.0) (2026-08-03)
 
 
