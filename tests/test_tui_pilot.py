@@ -63,6 +63,37 @@ CREATE TABLE messages (
 """
 
 
+async def _settle(pilot, app, screen_cls, ready=None, timeout: float = 10.0) -> None:
+    """Wait until the app lands on ``screen_cls`` (and ``ready()`` holds)
+    instead of racing a fixed pause.
+
+    Fixed pauses flake on slow CI runners (discovery and registration do real
+    filesystem/SQLite work in workers); polling keeps the fast case fast and
+    the slow case green. ``ready`` guards state that appears after the screen
+    itself, e.g. the picker's worker-populated rows.
+    """
+    def _ok() -> bool:
+        if not isinstance(app.screen, screen_cls):
+            return False
+        return ready() if ready is not None else True
+
+    waited = 0.0
+    while not _ok() and waited < timeout:
+        await pilot.pause(0.1)
+        waited += 0.1
+    assert isinstance(app.screen, screen_cls), (
+        f"expected {screen_cls.__name__}, on {type(app.screen).__name__} after {timeout}s"
+    )
+    assert _ok(), f"screen {screen_cls.__name__} present but ready() never held"
+
+
+def _rows(app, n: int):
+    """ready-predicate: the picker's DataTable has been populated with n rows."""
+    from textual.widgets import DataTable as _DT
+
+    return lambda: app.screen.query_one(_DT).row_count >= n
+
+
 def _make_stores(tmp_path: Path) -> tuple[Path, Path, Path]:
     claude_home = tmp_path / ".claude"
     proj = claude_home / "projects" / "-Users-x-proj"
@@ -117,23 +148,20 @@ def test_convert_flow_end_to_end(tmp_path):
 
     async def drive() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.5)
-            assert isinstance(app.screen, PickerScreen)
+            await _settle(pilot, app, PickerScreen, ready=_rows(app, 4))
             table = app.screen.query_one(DataTable)
             assert table.row_count == 4  # 1 file claude + 1 file hermes + 2 db hermes
 
             table.focus()
             await pilot.press("enter")
-            await pilot.pause(0.5)
-            assert isinstance(app.screen, SummaryScreen)
+            await _settle(pilot, app, SummaryScreen)
             assert app.screen.session is not None
             assert "source harness" in str(
                 app.screen.query_one("#summary-body", Static).render()
             )
 
             await pilot.press("c")
-            await pilot.pause(0.2)
-            assert isinstance(app.screen, OptionsScreen)
+            await _settle(pilot, app, OptionsScreen)
             opts_screen = app.screen
             opts_screen.query_one("#output").value = str(out_dir / "converted.jsonl")
             # Row 0 is a claude-code source, so the default target is codex
@@ -148,16 +176,18 @@ def test_convert_flow_end_to_end(tmp_path):
             opts_screen.query_one("#place", Switch).value = True
             opts_screen.query_one("#place-cwd").value = ""
             opts_screen.query_one("#continue", Button).press()
-            await pilot.pause(0.2)
-            assert isinstance(app.screen, OptionsScreen)
+            # invalid form: same screen, the error text appears asynchronously
+            await _settle(
+                pilot, app, OptionsScreen,
+                ready=lambda: str(opts_screen.query_one("#form-errors", Static).render()) != "",
+            )
             assert "placement is enabled but no project cwd" in str(
                 opts_screen.query_one("#form-errors", Static).render()
             )
             opts_screen.query_one("#place", Switch).value = False
 
             opts_screen.query_one("#continue", Button).press()
-            await pilot.pause(0.5)
-            assert isinstance(app.screen, DryRunScreen)
+            await _settle(pilot, app, DryRunScreen)
             assert app.screen.result is not None
             assert "session-bridge convert" in str(
                 app.screen.query_one("#dryrun-body", Static).render()
@@ -165,8 +195,7 @@ def test_convert_flow_end_to_end(tmp_path):
             assert not (out_dir / "converted.jsonl").exists(), "dry run wrote!"
 
             app.screen.query_one("#write", Button).press()
-            await pilot.pause(0.5)
-            assert isinstance(app.screen, ResultScreen)
+            await _settle(pilot, app, ResultScreen)
             assert app.screen.outcome.error is None
             assert (out_dir / "converted.jsonl").exists()
             # This flow targets claude-code without placement, so the result
@@ -175,16 +204,14 @@ def test_convert_flow_end_to_end(tmp_path):
             assert "heads up" in body and "Enable placement" in body
 
             await pilot.press("n")
-            await pilot.pause(0.2)
-            assert isinstance(app.screen, PickerScreen)
+            await _settle(pilot, app, PickerScreen, ready=_rows(app, 4))
             # Cursor through every row: the detail pane must survive
             # markup-hostile previews and duplicate-path db sessions.
             table = app.screen.query_one(DataTable)
             table.focus()
             for _ in range(table.row_count):
                 await pilot.press("down")
-            await pilot.pause(0.3)
-            assert isinstance(app.screen, PickerScreen)
+            await _settle(pilot, app, PickerScreen, ready=_rows(app, 4))
 
     asyncio.run(drive())
 
@@ -196,16 +223,14 @@ def test_register_flow_hermes_end_to_end(tmp_path):
 
     async def drive() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.5)
+            await _settle(pilot, app, PickerScreen, ready=_rows(app, 4))
             table = app.screen.query_one(DataTable)
             table.focus()
             await pilot.press("enter")
-            await pilot.pause(0.5)
-            assert isinstance(app.screen, SummaryScreen)
+            await _settle(pilot, app, SummaryScreen)
 
             await pilot.press("g")
-            await pilot.pause(0.2)
-            assert isinstance(app.screen, RegisterFormScreen)
+            await _settle(pilot, app, RegisterFormScreen)
             assert str(app.screen.query_one("#store", Select).value) == "hermes"
             # A claude-code source can target both stores; the note points
             # Claude Code seekers at Convert-with-placement instead.
@@ -229,8 +254,7 @@ def test_register_flow_hermes_end_to_end(tmp_path):
             assert n == 2, "plan phase mutated the store (2 pre-seeded db sessions)"
 
             app.screen.query_one("#register", Button).press()
-            await pilot.pause(0.7)
-            assert isinstance(app.screen, RegisterResultScreen)
+            await _settle(pilot, app, RegisterResultScreen)
             outcome = app.screen.outcome
             assert outcome.error is None
             assert outcome.backup_path is not None
@@ -253,17 +277,15 @@ def test_register_targets_exclude_source_harness(tmp_path):
 
     async def drive() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.5)
+            await _settle(pilot, app, PickerScreen, ready=_rows(app, 4))
             table = app.screen.query_one(DataTable)
             table.focus()
             await pilot.press("down")  # row 1: the hermes file session
             await pilot.press("enter")
-            await pilot.pause(0.5)
-            assert isinstance(app.screen, SummaryScreen)
+            await _settle(pilot, app, SummaryScreen)
             assert app.screen.entry.harness == "hermes"
             await pilot.press("g")
-            await pilot.pause(0.3)
-            assert isinstance(app.screen, RegisterFormScreen)
+            await _settle(pilot, app, RegisterFormScreen)
             store_values = {v for _, v in app.screen.query_one("#store", Select)._options}
             assert store_values == {"codex"}
 
@@ -277,13 +299,12 @@ def test_summary_shows_store_session_id_for_hermes(tmp_path):
 
     async def drive() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.5)
+            await _settle(pilot, app, PickerScreen, ready=_rows(app, 4))
             table = app.screen.query_one(DataTable)
             table.focus()
             await pilot.press("down")
             await pilot.press("enter")
-            await pilot.pause(0.6)
-            assert isinstance(app.screen, SummaryScreen)
+            await _settle(pilot, app, SummaryScreen)
             body = str(app.screen.query_one("#summary-body", Static).render())
             assert "20260417_hx-1 (from store)" in body
 
@@ -297,15 +318,13 @@ def test_transcript_viewer_from_summary(tmp_path):
 
     async def drive() -> None:
         async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.5)
+            await _settle(pilot, app, PickerScreen, ready=_rows(app, 4))
             table = app.screen.query_one(DataTable)
             table.focus()
             await pilot.press("enter")  # row 0: the claude session
-            await pilot.pause(0.6)
-            assert isinstance(app.screen, SummaryScreen)
+            await _settle(pilot, app, SummaryScreen)
             await pilot.press("v")
-            await pilot.pause(0.2)
-            assert isinstance(app.screen, TranscriptScreen)
+            await _settle(pilot, app, TranscriptScreen)
             body = str(app.screen.query_one("#transcript-body", Static).render())
             assert "search for TODO comments" in body
             assert "thinking · I'll grep for TODO." in body
@@ -336,11 +355,9 @@ def test_transcript_viewer_survives_markup_hostile_db_session(tmp_path):
             for _ in range(idx):
                 await pilot.press("down")
             await pilot.press("enter")
-            await pilot.pause(0.6)
-            assert isinstance(app.screen, SummaryScreen)
+            await _settle(pilot, app, SummaryScreen)
             await pilot.press("v")
-            await pilot.pause(0.2)
-            assert isinstance(app.screen, TranscriptScreen)
+            await _settle(pilot, app, TranscriptScreen)
             body = str(app.screen.query_one("#transcript-body", Static).render())
             assert "IMPORTANT: cron job" in body
 
