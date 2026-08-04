@@ -284,3 +284,10 @@ bash scripts/install_weekly_check.sh   # launchd job, Mondays 09:30, notifies on
 
 Real captured sessions may contain secrets; `fixtures/real/` is gitignored and
 tests run only against synthetic, faithful fixtures.
+
+## How this was built
+
+session-bridge was built with Claude Code and Hermes Agent — the same harnesses
+it bridges — and its own sessions were moved between them during development.
+Every conversion pair is live-verified against real installs of all three (see
+[Supported versions](#supported-versions)).
